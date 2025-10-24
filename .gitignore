@@ -1,0 +1,36 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.moved-aside
+*.xcscmblueprint
+
+# SwiftPM
+/.build/
+Packages/
+Package.pins
+# Behold Package.resolved (den må gerne committes)
+
+# CocoaPods/Carthage (hvis du ikke bruger dem)
+Pods/
+Carthage/
+.cartfile.resolved
+Cartfile.resolved
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+
+# OS/editor
+.DS_Store
+*.swp
+*.swo
+
+# Secrets/config
+Secrets.xcconfig
+*.env
+.env.*
