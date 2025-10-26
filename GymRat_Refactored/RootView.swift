@@ -15,8 +15,6 @@ struct RootView: View {
     
     @State private var activeTabItem: TabItem = .home
     
-    //@StateObject private var numpadHost: _NumpadHost = .init()
-    
     init (comp: AppComposition) {
 
         self._comp = ObservedObject(initialValue: comp)

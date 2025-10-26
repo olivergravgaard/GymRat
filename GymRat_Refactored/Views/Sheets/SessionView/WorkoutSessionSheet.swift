@@ -7,7 +7,6 @@ struct WorkoutSessionSheet: View {
     
     @ObservedObject var editStore: WorkoutSessionEditStore
     
-    @State private var propertyMenuProgress: CGFloat = 0
     @State private var showEditSessionSheet: Bool = false
     @State private var showAddExerciseSheet: Bool = false
     @State private var showReplaceExerciseSheet: Bool = false
@@ -21,6 +20,7 @@ struct WorkoutSessionSheet: View {
     
     @StateObject var numpadHost: _NumpadHost = .init()
     
+    @State private var propertyMenuProgress: CGFloat = 0
     @State private var hidePropertyMenu: Bool = false
     
     init (isPresented: Binding<Bool>, editStore: WorkoutSessionEditStore) {

@@ -27,6 +27,11 @@ struct SetSessionView: View {
         return String(editStore.setDTO.reps)
     }
     
+    var initialRestText: String {
+        guard let restSession = editStore.restSession else { return ""}
+        return formatRest(restSession.duration)
+    }
+    
     @State private var restActive: Bool = false
     @State private var restSwipeProgress: CGFloat = 0
     
@@ -35,6 +40,7 @@ struct SetSessionView: View {
         self.numpadHost = numpadHost
         self._weightText = State(initialValue: initialWeight)
         self._repsText = State(initialValue: initialReps)
+        self._restText = State(initialValue: initialRestText)
     }
     
     var body: some View {
@@ -183,7 +189,7 @@ struct SetSessionView: View {
             
             if let restSeession = editStore.restSession {
                 FieldRow(
-                    id: restSeession.uid,
+                    id: restSeession.id,
                     host: numpadHost,
                     inputPolicy: InputPolicies.time(limit: .hours, allowedNegative: false),
                     config: .init(
@@ -195,7 +201,6 @@ struct SetSessionView: View {
                         alignment: .center,
                         actions: .init(
                             onBecomeActive: {
-                                
                                 withAnimation {
                                     restActive = true
                                 }
@@ -273,7 +278,7 @@ struct SetSessionView: View {
     private func formatRest(_ v: Int?) -> String {
         guard let v = v else { return "" }
         var total = v
-        if total < 0 { total = -total } // fjern evt. hvis du ikke vil håndtere negative værdier
+        if total < 0 { total = -total }
 
         let days  = total / 86_400; total %= 86_400
         let hours = total / 3_600;  total %= 3_600
@@ -346,7 +351,7 @@ struct SetSessionView: View {
     private func commitRest () {
         guard let restSession = editStore.restSession else { return }
         
-        if let v = parseRest(restText), v != restSession.dto.duration {
+        if let v = parseRest(restText), v != restSession.duration {
             restSession.setDuration(v)
             editStore.delegate?.childDidChange()
         }

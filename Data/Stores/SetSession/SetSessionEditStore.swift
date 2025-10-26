@@ -8,7 +8,11 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     typealias DTO = SetSessionDTO
     
     let id: UUID
-    @Published var setDTO: DTO
+    @Published var setDTO: DTO {
+        didSet {
+            syncRestStore()
+        }
+    }
     
     let weightFieldId = UUID()
     let repsFieldId = UUID()
@@ -29,21 +33,13 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
         self.setDTO = dto
         self.delegate = delegate
         self.parentEditStore = parentEditStore
-        
-        if let restSession = dto.restSession {
-            self.restSession = .init(
-                dto: restSession,
-                parentEditStore: self
-            )
-        }
+        syncRestStore()
     }
     
     func setSetType (to setType: SetType) {
         guard setDTO.setType != setType else { return }
         setDTO.setType = setType
-        
         parentEditStore.recomputeSetTypeDisplays()
-        
         self.delegate?.childDidChange()
     }
     
@@ -77,25 +73,6 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
         parentEditStore.removeSet(self.id)
     }
     
-    func addRestSession () {
-        guard restSession == nil else { return }
-        
-        let dto = RestSession(duration: 0, startedAt: nil, endedAt: nil, restState: .none)
-        setDTO.restSession = dto
-        
-        let store = RestSessionEditStore(dto: dto, parentEditStore: self)
-        self.restSession = store
-        delegate?.childDidChange()
-    }
-    
-    func removeRestSession () {
-        guard restSession != nil else { return }
-        setDTO.restSession = nil
-        
-        self.restSession = nil
-        delegate?.childDidChange()
-    }
-    
     func markPerformed () {
         guard setDTO.performed == false else { return }
         setDTO.performed = true
@@ -110,8 +87,26 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
         self.delegate?.childDidChange()
     }
     
+    func addRestSession () {
+        guard restSession == nil else { return }
+        setDTO.restSession = RestSession(duration: 0, startedAt: nil, endedAt: nil, restState: .idle)
+        syncRestStore()
+        delegate?.childDidChange()
+    }
+    
+    func removeRestSession () {
+        guard restSession != nil else { return }
+        setDTO.restSession = nil
+        self.restSession = nil
+        delegate?.childDidChange()
+    }
+    
+    func setRestDuration (_ seconds: Int) {
+        guard restSession != nil else { return }
+        restSession?.setDuration(max(0, seconds))
+    }
+    
     func snapshot () -> DTO {
-        setDTO.restSession = restSession?.dto ?? nil
         return setDTO
     }
     
@@ -119,7 +114,7 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
         var final: [UUID] = [weightFieldId, repsFieldId]
         
         if restSession != nil {
-            final.append(restSession!.uid)
+            final.append(restSession!.id)
         }
         
         return final
@@ -127,6 +122,26 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     
     func getGlobalFieldsOrder () async -> [UUID] {
         return await parentEditStore.getGlobalFieldsOrder()
+    }
+    
+    private func syncRestStore () {
+        if setDTO.restSession != nil {
+            if restSession == nil {
+                restSession = RestSessionEditStore(
+                    get: { [weak self] in
+                        self?.setDTO.restSession
+                    },
+                    set: { [weak self] new in
+                        self?.setDTO.restSession = new
+                    },
+                    onChange: { [weak self] in
+                        self?.delegate?.childDidChange()
+                    }
+                )
+            }
+        }else {
+            restSession = nil
+        }
     }
     
     var setTypeColor: Color {

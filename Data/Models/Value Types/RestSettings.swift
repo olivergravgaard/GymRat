@@ -23,7 +23,7 @@ nonisolated struct RestTemplate: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct RestSession: Codable, Equatable, Sendable {
+nonisolated public struct RestSession: Codable, Equatable, Sendable {
     var duration: Int
     var startedAt: Date?
     var endedAt: Date?

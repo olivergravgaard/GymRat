@@ -1,19 +1,40 @@
 import Foundation
 import Combine
 
-final class RestSessionEditStore: ObservableObject, Identifiable {
-    var uid: UUID
-    @Published var dto: RestSession
+final class RestSessionEditStore: ObservableObject {
+    let id: UUID = UUID()
     
-    let parentEditStore: SetSessionEditStore
+    private let get: () -> RestSession?
+    private let set: (RestSession?) -> Void
+    private let onChange: () -> Void
     
-    init (dto: RestSession, parentEditStore: SetSessionEditStore) {
-        self.uid = UUID()
-        self.dto = dto
-        self.parentEditStore = parentEditStore
+    init (
+        get: @escaping () -> RestSession?,
+        set: @escaping (RestSession?) -> Void,
+        onChange: @escaping () -> Void
+    ) {
+        self.get = get
+        self.set = set
+        self.onChange = onChange
     }
     
-    func setDuration (_ v: Int) {
-        dto.duration = v
+    private var rest: RestSession? {
+        get {
+            get()
+        }
+        set {
+            set(newValue)
+            onChange()
+        }
+    }
+    
+    var duration: Int {
+        rest?.duration ?? 0
+    }
+    
+    func setDuration (_ seconds: Int) {
+        guard var rest = rest else { return }
+        rest.duration = max(0, seconds)
+        self.rest = rest
     }
 }

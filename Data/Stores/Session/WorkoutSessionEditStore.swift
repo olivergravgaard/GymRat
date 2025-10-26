@@ -24,11 +24,45 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
     private let debounce: Duration = .milliseconds(2000)
     private let maxCoalesce: Duration = .seconds(4)
     
+    private var restOrchestrator: RestSessionOrchestrator!
+    
     init (draftStore: SessionDraftStore, repo: SessionRepository) {
         self.id = nil
         self.sessionDTO = nil
         self.draftStore = draftStore
         self.repo = repo
+        self.restOrchestrator = RestSessionOrchestrator(
+            getRest: { setId in
+                await MainActor.run {
+                    self.findSet(by: setId)?.setDTO.restSession
+                }
+            },
+            ensureRestExists: { setId in
+                await MainActor.run {
+                    guard let store = self.findSet(by: setId) else { return }
+                    if store.restSession == nil {
+                        store.addRestSession()
+                    }
+                }
+            },
+            setRest: { setId, new in
+                await MainActor.run {
+                    guard let store = self.findSet(by: setId) else { return }
+                    store.setDTO.restSession = new
+                    store.delegate?.childDidChange()
+                }
+            },
+            markDirty: {
+                await MainActor.run {
+                    self.markDirty()
+                }
+            },
+            findFirstRunningId: {
+                await MainActor.run {
+                    self.firstRunningRest()?.id
+                }
+            }
+        )
     }
     
     func boot (dto: WorkoutSessionDTO) {
@@ -166,12 +200,30 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
         return final
     }
     
-    
     func getFieldIndex (for id: UUID) async -> Int? {
         let fieldsOrder: [UUID] = await self.getGlobalFieldsOrder()
         
         return fieldsOrder.firstIndex(of: id)
     }
+    
+    func findSet(by id: UUID) -> SetSessionEditStore? {
+        for exerciseSession in exerciseSessions {
+            if let hit = exerciseSession.setSessions.first(where: { $0.id == id }) {
+                return hit
+            }
+        }
+        return nil
+    }
+
+    func firstRunningRest() -> SetSessionEditStore? {
+        for exerciseSession in exerciseSessions {
+            if let hit = exerciseSession.setSessions.first(where: { $0.setDTO.restSession?.restState == .running }) {
+                return hit
+            }
+        }
+        return nil
+    }
+    // END FOR RESTTIMER
     
     var hasUnperformedSets: Bool {
         return exerciseSessions.contains { $0.hasUnperformedSets }
