@@ -18,7 +18,7 @@ final class ExerciseSessionEditStore: ExerciseChildEditStore {
         self.parentEditStore = parentEditStore
         self.setSessions = dto.sets
             .sorted { $0.order < $1.order }
-            .map { SetSessionEditStore(dto: $0, delegate: delegate, parentEditStore: self)}
+            .map { SetSessionEditStore(dto: $0, delegate: delegate, parentEditStore: self, orchestrator: parentEditStore.restOrchestrator)}
         
         self.recomputeSetTypeDisplays()
     }
@@ -61,15 +61,17 @@ final class ExerciseSessionEditStore: ExerciseChildEditStore {
             restSession: nil
         )
         
-        let store = SetSessionEditStore(dto: dto, delegate: delegate, parentEditStore: self)
+        let store = SetSessionEditStore(dto: dto, delegate: delegate, parentEditStore: self, orchestrator: parentEditStore.restOrchestrator)
         setSessions.append(store)
         delegate?.childDidChange()
         
         recomputeSetTypeDisplays()
     }
     
-    func addWarmupSets (_ count: Int) {
-        for setSession in setSessions {
+    func addWarmupSets (_ count: Int?) {
+        guard let count = count else { return }
+        
+        setSessions.forEach { setSession in
             setSession.setOrder(setSession.setDTO.order + count)
         }
         
@@ -89,7 +91,8 @@ final class ExerciseSessionEditStore: ExerciseChildEditStore {
             let store = SetSessionEditStore(
                 dto: dto,
                 delegate: delegate,
-                parentEditStore: self
+                parentEditStore: self,
+                orchestrator: parentEditStore.restOrchestrator
             )
             
             warmupSets.append(store)

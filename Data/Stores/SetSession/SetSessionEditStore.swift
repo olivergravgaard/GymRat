@@ -8,32 +8,128 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     typealias DTO = SetSessionDTO
     
     let id: UUID
-    @Published var setDTO: DTO {
-        didSet {
-            syncRestStore()
-        }
-    }
+    @Published var setDTO: DTO
+    
+    weak var delegate: (any WorkoutSessionChildDelegate)?
+    let parentEditStore: ExerciseSessionEditStore
+    
+    private let orchestrator: RestSessionOrchestrator
+    @Published private(set) var restTick: RestTick?
+    private var tickTask: Task<Void, Never>?
+    
+    @Published private(set) var setTypeDisplay: String = "-"
     
     let weightFieldId = UUID()
     let repsFieldId = UUID()
-    
-    weak var delegate: (any WorkoutSessionChildDelegate)?
-    
-    let parentEditStore: ExerciseSessionEditStore
-    
-    @Published private(set) var setTypeDisplay: String = "-"
-    @Published private(set) var restSession: RestSessionEditStore?
+    let restFieldId = UUID()
     
     static func == (lhs: SetSessionEditStore, rhs: SetSessionEditStore) -> Bool {
         lhs.setDTO.id == rhs.setDTO.id
     }
     
-    init (dto: DTO, delegate: (any WorkoutSessionChildDelegate)?, parentEditStore: ExerciseSessionEditStore) {
+    init (
+        dto: DTO,
+        delegate: (any WorkoutSessionChildDelegate)?,
+        parentEditStore: ExerciseSessionEditStore,
+        orchestrator: RestSessionOrchestrator
+    ) {
         self.id = dto.id
         self.setDTO = dto
         self.delegate = delegate
         self.parentEditStore = parentEditStore
-        syncRestStore()
+        self.orchestrator = orchestrator
+        
+        subscribeToRestTicks()
+    }
+    
+    deinit {
+        tickTask?.cancel()
+    }
+    
+    var hasRest: Bool {
+        setDTO.restSession != nil
+    }
+    
+    var restDuration: Int? {
+        setDTO.restSession?.duration ?? nil
+    }
+    
+    func addRestSession () {
+        guard !hasRest else { return }
+        setDTO.restSession = RestSession(duration: 0, startedAt: nil, endedAt: nil, restState: .idle)
+        delegate?.childDidChange()
+    }
+    
+    func removeRestSession () {
+        guard hasRest else { return }
+        setDTO.restSession = nil
+        restTick = nil
+        delegate?.childDidChange()
+        
+        Task {
+            await orchestrator.stopIfActive(setId: id, sendFinal: true)
+        }
+    }
+    
+    func addTimeToREst (_ seconds: Int) {
+        guard hasRest, setDTO.restSession?.restState == .running else { return }
+        
+        setDTO.restSession!.duration += seconds
+        delegate?.childDidChange()
+        
+        Task {
+            await orchestrator.adjust(by: seconds)
+        }
+    }
+    
+    func setRestDuration (_ seconds: Int) {
+        guard hasRest else { return }
+        setDTO.restSession!.duration = max(0, seconds)
+        delegate?.childDidChange()
+    }
+    
+    func startRest () {
+        if !hasRest { return }
+        let now = Date()
+        let total = max(0, setDTO.restSession?.duration ?? 0)
+        
+        setDTO.restSession!.startedAt = now
+        setDTO.restSession!.endedAt = nil
+        setDTO.restSession!.restState = .running
+        delegate?.childDidChange()
+        
+        restTick = RestTick(setId: id, total: total, remaining: total, isFinished: false)
+        
+        Task {
+            await orchestrator.start(setId: id, total: total, startedAt: now)
+        }
+    }
+    
+    func stopRest () {
+        let ended = Date()
+        
+        if hasRest {
+            setDTO.restSession!.endedAt = ended
+            setDTO.restSession!.restState = .completed
+            delegate?.childDidChange()
+        }
+        
+        Task {
+            await orchestrator.stopIfActive(setId: id, sendFinal: true)
+        }
+    }
+    
+    private func subscribeToRestTicks () {
+        tickTask?.cancel()
+        tickTask = Task { [weak self] in
+            guard let self else { return }
+            let stream = await orchestrator.subscribe(setId: self.id)
+            for await tick in stream {
+                await MainActor.run {
+                    self.restTick = tick
+                }
+            }
+        }
     }
     
     func setSetType (to setType: SetType) {
@@ -87,25 +183,6 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
         self.delegate?.childDidChange()
     }
     
-    func addRestSession () {
-        guard restSession == nil else { return }
-        setDTO.restSession = RestSession(duration: 0, startedAt: nil, endedAt: nil, restState: .idle)
-        syncRestStore()
-        delegate?.childDidChange()
-    }
-    
-    func removeRestSession () {
-        guard restSession != nil else { return }
-        setDTO.restSession = nil
-        self.restSession = nil
-        delegate?.childDidChange()
-    }
-    
-    func setRestDuration (_ seconds: Int) {
-        guard restSession != nil else { return }
-        restSession?.setDuration(max(0, seconds))
-    }
-    
     func snapshot () -> DTO {
         return setDTO
     }
@@ -113,8 +190,8 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     func getLocalFieldsORder () -> [UUID] {
         var final: [UUID] = [weightFieldId, repsFieldId]
         
-        if restSession != nil {
-            final.append(restSession!.id)
+        if setDTO.restSession != nil {
+            final.append(restFieldId)
         }
         
         return final
@@ -122,26 +199,6 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     
     func getGlobalFieldsOrder () async -> [UUID] {
         return await parentEditStore.getGlobalFieldsOrder()
-    }
-    
-    private func syncRestStore () {
-        if setDTO.restSession != nil {
-            if restSession == nil {
-                restSession = RestSessionEditStore(
-                    get: { [weak self] in
-                        self?.setDTO.restSession
-                    },
-                    set: { [weak self] new in
-                        self?.setDTO.restSession = new
-                    },
-                    onChange: { [weak self] in
-                        self?.delegate?.childDidChange()
-                    }
-                )
-            }
-        }else {
-            restSession = nil
-        }
     }
     
     var setTypeColor: Color {

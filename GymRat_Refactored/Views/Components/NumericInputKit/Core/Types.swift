@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 public typealias FieldID = UUID
 
@@ -64,4 +65,43 @@ extension String {
     }
     @inline(__always)
     var utf16Count: Int { utf16.count }
+}
+
+public struct KeyboardButtonStyle: Equatable {
+    public var fontSize: CGFloat
+    public var weight: UIFont.Weight
+    public var cornerRadius: CGFloat
+    public var borderWidth: CGFloat
+    public var fillColor: UIColor
+    public var borderColor: UIColor
+    public var titleColor: UIColor
+
+    public init(fontSize: CGFloat = 22,
+                weight: UIFont.Weight = .semibold,
+                cornerRadius: CGFloat = 12,
+                borderWidth: CGFloat = 0.5,
+                fillColor: UIColor = .systemBackground,
+                borderColor: UIColor = .separator,
+                titleColor: UIColor = .label) {
+        self.fontSize = fontSize
+        self.weight = weight
+        self.cornerRadius = cornerRadius
+        self.borderWidth = borderWidth
+        self.fillColor = fillColor
+        self.borderColor = borderColor
+        self.titleColor = titleColor
+    }
+}
+
+public indirect enum KeyboardNode: Equatable {
+    case vstack(spacing: CGFloat, children: [KeyboardNode])
+    case hstack(spacing: CGFloat, children: [KeyboardNode])
+    case zstack(children: [KeyboardNode])
+    case box(padding: UIEdgeInsets, child: KeyboardNode)
+    case grid(columns: Int, rowSpacing: CGFloat, colSpacing: CGFloat, items: [KeyboardNode])
+    case spacer(flex: Int)
+    case aspectRatio(_ ratio: CGFloat, child: KeyboardNode)
+    case overlay(alignment: CGPoint, child: KeyboardNode)
+    case button(title: String, sends: NumpadKey, style: KeyboardButtonStyle = .init())
+    case empty
 }

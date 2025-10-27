@@ -18,7 +18,8 @@ struct WorkoutSessionSheet: View {
     
     @Binding var isPresented: Bool
     
-    @StateObject var numpadHost: _NumpadHost = .init()
+    @StateObject var numpadHost: NumpadHost = .init()
+    @StateObject var standaloneNumpadHost: FocusOnlyHost = .init()
     
     @State private var propertyMenuProgress: CGFloat = 0
     @State private var hidePropertyMenu: Bool = false
@@ -36,7 +37,8 @@ struct WorkoutSessionSheet: View {
                         ExerciseSessionView(
                             editStore: exerciseSession,
                             replaceExercisePayload: $replaceExercisePayload,
-                            numpadHost: numpadHost
+                            numpadHost: numpadHost,
+                            standaloneNumpadHost: standaloneNumpadHost
                         )
                     }
                 }
@@ -60,12 +62,7 @@ struct WorkoutSessionSheet: View {
                 topBar()
                     .frame(maxWidth: .infinity)
             }
-            .safeAreaInset(edge: .bottom) {
-                if numpadHost.activeId != nil {
-                    NumpadRepresentable(host: numpadHost)
-                        .frame(height: 264)
-                }
-            }
+            .keyboardInset(host: numpadHost)
             .ignoresSafeArea(edges: [.bottom])
             .overlay (alignment: .bottom) {
                 if !hidePropertyMenu {

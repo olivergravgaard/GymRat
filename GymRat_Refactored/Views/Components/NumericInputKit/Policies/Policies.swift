@@ -1,6 +1,7 @@
 import Foundation
 
-public struct _DigitsOnlyPolicy: _InputPolicy {
+public struct _DigitsOnlyPolicy: InputPolicy {
+    
     public var maxDigits: Int
     public var allowNegative: Bool
 
@@ -100,7 +101,43 @@ public struct _DigitsOnlyPolicy: _InputPolicy {
     }
 }
 
-public struct _DecimalPolicy: _InputPolicy {
+extension _DigitsOnlyPolicy: KeyboardTreeProviding {
+    public func keyboardTree(hostSupportsNavigation: Bool) -> KeyboardNode {
+        let style = KeyboardButtonStyle()
+        let navPrev: KeyboardNode = hostSupportsNavigation ? .button(title: "Prev", sends: .prev, style: style) : .spacer(flex: 1)
+        let navNext: KeyboardNode = hostSupportsNavigation ? .button(title: "Next", sends: .next, style: style) : .spacer(flex: 1)
+        let minus: KeyboardNode = allowNegative ? .button(title: "−", sends: .minus, style: style) : .spacer(flex: 1)
+
+        return .vstack(spacing: 8, children: [
+            .hstack(spacing: 8, children: [
+                .button(title: "1", sends: .digit("1"), style: style),
+                .button(title: "2", sends: .digit("2"), style: style),
+                .button(title: "3", sends: .digit("3"), style: style),
+                navPrev
+            ]),
+            .hstack(spacing: 8, children: [
+                .button(title: "4", sends: .digit("4"), style: style),
+                .button(title: "5", sends: .digit("5"), style: style),
+                .button(title: "6", sends: .digit("6"), style: style),
+                navNext
+            ]),
+            .hstack(spacing: 8, children: [
+                .button(title: "7", sends: .digit("7"), style: style),
+                .button(title: "8", sends: .digit("8"), style: style),
+                .button(title: "9", sends: .digit("9"), style: style),
+                .button(title: "⌫", sends: .backspace, style: style),
+            ]),
+            .hstack(spacing: 8, children: [
+                minus,
+                .button(title: "0", sends: .digit("0"), style: style),
+                .button(title: "Clear", sends: .clear, style: style),
+                .button(title: "Done", sends: .done, style: style),
+            ])
+        ])
+    }
+}
+
+public struct _DecimalPolicy: InputPolicy {
     public var allowNegative: Bool
     public var maxIntegerDigits: Int
     public var maxFractionDigits: Int
@@ -386,7 +423,44 @@ public struct _DecimalPolicy: _InputPolicy {
     }
 }
 
-public struct _TimePolicy: _InputPolicy {
+extension _DecimalPolicy: KeyboardTreeProviding {
+    public func keyboardTree(hostSupportsNavigation: Bool) -> KeyboardNode {
+        let style = KeyboardButtonStyle()
+        let navPrev: KeyboardNode = hostSupportsNavigation ? .button(title: "Prev", sends: .prev, style: style) : .spacer(flex: 1)
+        let navNext: KeyboardNode = hostSupportsNavigation ? .button(title: "Next", sends: .next, style: style) : .spacer(flex: 1)
+        let minus: KeyboardNode = allowNegative ? .button(title: "−", sends: .minus, style: style) : .spacer(flex: 1)
+        let dotTitle = String(decimalSeparator)
+
+        return .vstack(spacing: 8, children: [
+            .hstack(spacing: 8, children: [
+                .button(title: "1", sends: .digit("1"), style: style),
+                .button(title: "2", sends: .digit("2"), style: style),
+                .button(title: "3", sends: .digit("3"), style: style),
+                navPrev
+            ]),
+            .hstack(spacing: 8, children: [
+                .button(title: "4", sends: .digit("4"), style: style),
+                .button(title: "5", sends: .digit("5"), style: style),
+                .button(title: "6", sends: .digit("6"), style: style),
+                navNext
+            ]),
+            .hstack(spacing: 8, children: [
+                .button(title: "7", sends: .digit("7"), style: style),
+                .button(title: "8", sends: .digit("8"), style: style),
+                .button(title: "9", sends: .digit("9"), style: style),
+                .button(title: "⌫", sends: .backspace, style: style),
+            ]),
+            .hstack(spacing: 8, children: [
+                .button(title: dotTitle, sends: .decimal, style: style),
+                .button(title: "0", sends: .digit("0"), style: style),
+                minus,
+                .button(title: "Done", sends: .done, style: style),
+            ])
+        ])
+    }
+}
+
+public struct _TimePolicy: InputPolicy {
 
     public enum MaxTimeLimit: Equatable {
         case seconds
@@ -661,16 +735,52 @@ public struct _TimePolicy: _InputPolicy {
     }
 }
 
+extension _TimePolicy: KeyboardTreeProviding {
+    public func keyboardTree(hostSupportsNavigation: Bool) -> KeyboardNode {
+        let style = KeyboardButtonStyle()
+        let navPrev: KeyboardNode = hostSupportsNavigation ? .button(title: "Prev", sends: .prev, style: style) : .spacer(flex: 1)
+        let navNext: KeyboardNode = hostSupportsNavigation ? .button(title: "Next", sends: .next, style: style) : .spacer(flex: 1)
+        let minus: KeyboardNode = allowNegative ? .button(title: "−", sends: .minus, style: style) : .spacer(flex: 1)
+
+        return .vstack(spacing: 8, children: [
+            .hstack(spacing: 8, children: [
+                .button(title: "1", sends: .digit("1"), style: style),
+                .button(title: "2", sends: .digit("2"), style: style),
+                .button(title: "3", sends: .digit("3"), style: style),
+                navPrev
+            ]),
+            .hstack(spacing: 8, children: [
+                .button(title: "4", sends: .digit("4"), style: style),
+                .button(title: "5", sends: .digit("5"), style: style),
+                .button(title: "6", sends: .digit("6"), style: style),
+                navNext
+            ]),
+            .hstack(spacing: 8, children: [
+                .button(title: "7", sends: .digit("7"), style: style),
+                .button(title: "8", sends: .digit("8"), style: style),
+                .button(title: "9", sends: .digit("9"), style: style),
+                .button(title: "⌫", sends: .backspace, style: style),
+            ]),
+            .hstack(spacing: 8, children: [
+                minus,
+                .button(title: "0", sends: .digit("0"), style: style),
+                .button(title: "Clear", sends: .clear, style: style),
+                .button(title: "Done", sends: .done, style: style),
+            ])
+        ])
+    }
+}
+
 public enum InputPolicies {
-    public static func digitsOnly(maxDigits: Int, allowNegative: Bool = false) -> _InputPolicy {
+    public static func digitsOnly(maxDigits: Int, allowNegative: Bool = false) -> InputPolicy {
         _DigitsOnlyPolicy(maxDigits: maxDigits, allowNegative: allowNegative)
     }
 
-    public static func decimal(maxDigits: Int, maxFractionDigits: Int, allowNegative: Bool = false, decimalSeparator: Character = ".") -> _InputPolicy {
+    public static func decimal(maxDigits: Int, maxFractionDigits: Int, allowNegative: Bool = false, decimalSeparator: Character = ".") -> InputPolicy {
         _DecimalPolicy(maxIntegerDigits: maxDigits, maxFractionDigits: maxFractionDigits, allowNegative: allowNegative, decimalSeparator: decimalSeparator)
     }
     
-    public static func time(limit: _TimePolicy.MaxTimeLimit, allowedNegative: Bool = false) -> _InputPolicy {
+    public static func time(limit: _TimePolicy.MaxTimeLimit, allowedNegative: Bool = false) -> InputPolicy {
         _TimePolicy(allowNegative: allowedNegative, maxTimeLimit: limit)
     }
 }

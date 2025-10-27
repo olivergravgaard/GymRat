@@ -8,35 +8,51 @@ struct MorphMenuConfig {
     var animation: Animation = .bouncy(duration: 0.5, extraBounce: 0)
 }
 
-struct MorphMenuView<Label: View, Menu: View>: View {
+struct MorphMenuView<Label: View, Menu: View, Host: NumpadHosting>: View {
     
     // Arguments
+    let numpadHost: Host
     let config: MorphMenuConfig
+    let proxy: ScrollViewProxy?
     let label: () -> Label
     let menu: (_ close: @escaping (_ onClosed: @escaping () -> ()) -> ()) -> Menu
     
     // View properties
+    @State private var id: UUID = UUID()
     @State private var isPresented: Bool = false
     @State private var isClosing: Bool = false
     @State private var progress: CGFloat = 0
     
     init (
+        numpadHost: Host,
         config: MorphMenuConfig,
+        proxy: ScrollViewProxy? = nil,
         @ViewBuilder label: @escaping () -> Label,
         @ViewBuilder menu: @escaping (_ close: @escaping (_ onClosed: @escaping () -> ()) -> ()) -> Menu
     ) {
+        self.numpadHost = numpadHost
         self.config = config
+        self.proxy = proxy
         self.label = label
         self.menu = menu
     }
     
     var body: some View {
         Button {
-            open()
+            if let proxy = proxy {
+                withAnimation(.snappy(duration: 0.5), completionCriteria: .logicallyComplete) {
+                    proxy.scrollTo(id, anchor: .top)
+                } completion: {
+                    open()
+                }
+            }else {
+                open()
+            }
         } label: {
             label()
                 .morphMenu(
                     isPresented: $isPresented,
+                    numpadHost: numpadHost,
                     isClosing: $isClosing,
                     alignment: config.alignment,
                     cornerRadius: config.cornerRadius,
@@ -57,10 +73,12 @@ struct MorphMenuView<Label: View, Menu: View>: View {
                         }
                     }
         }
+        .id(id)
     }
     
     private func close (onClosed: @escaping () -> ()) {
         guard !isClosing else { return }
+        numpadHost.setActive(nil)
         isClosing = true
         withAnimation(config.animation, completionCriteria: .logicallyComplete) {
             progress = 0
@@ -91,8 +109,9 @@ struct MorphMenuView<Label: View, Menu: View>: View {
     }
 }
 
-struct MorphMenuModifier<Label: View, Popup: View>: ViewModifier, Animatable {
+struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewModifier, Animatable {
     @Binding var isPresented: Bool
+    @ObservedObject var numpadHost: Host
     @Binding var isClosing: Bool
     var alignment: Alignment
     var cornerRadius: CGFloat
@@ -188,6 +207,11 @@ struct MorphMenuModifier<Label: View, Popup: View>: ViewModifier, Animatable {
                     onOpen()
                 }
                 .ignoresSafeArea()
+                .overlay {
+                    Color.clear
+                        .keyboardInset(host: numpadHost)
+                        .ignoresSafeArea(edges: [.bottom])
+                }
             }
     }
     
@@ -308,8 +332,9 @@ struct MorphMenuModifier<Label: View, Popup: View>: ViewModifier, Animatable {
 }
 
 fileprivate extension View {
-    func morphMenu<Label: View,Popup: View>(
+    func morphMenu<Label: View, Popup: View, Host: NumpadHosting>(
         isPresented: Binding<Bool>,
+        numpadHost: Host,
         isClosing: Binding<Bool>,
         alignment: Alignment,
         cornerRadius: CGFloat,
@@ -323,6 +348,7 @@ fileprivate extension View {
         self.modifier(
             MorphMenuModifier(
                 isPresented: isPresented,
+                numpadHost: numpadHost,
                 isClosing: isClosing,
                 alignment: alignment,
                 cornerRadius: cornerRadius,

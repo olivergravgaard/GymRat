@@ -2,8 +2,8 @@ import SwiftUI
 
 struct FieldRow: View {
     let id: FieldID
-    let host: _NumpadHost
-    let inputPolicy: _InputPolicy
+    let host: any NumpadHosting
+    let inputPolicy: InputPolicy
     let config: FieldConfig
     
     @Binding var text: String

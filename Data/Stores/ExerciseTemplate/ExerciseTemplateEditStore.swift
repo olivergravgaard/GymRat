@@ -39,6 +39,22 @@ final class ExerciseTemplateEditStore: ExerciseChildEditStore {
         delegate?.childDidChange()
     }
     
+    func updateRestTimers (warmup: Int?, working: Int?) {
+        setTemplates.filter(\.hasRest).forEach {
+            $0.setRestDuration($0.isWarmup ? warmup : working, source: .external)
+        }
+        
+        if let warmup = warmup {
+            exerciseChildDTO.settings.warmupRestDuration = warmup
+        }
+        
+        if let working = working {
+            exerciseChildDTO.settings.setRestDuration = working
+        }
+        
+        delegate?.childDidChange()
+    }
+    
     func toggleRestTimer (_ value: Bool) {
         exerciseChildDTO.settings.useRestTimer = value
         delegate?.childDidChange()
@@ -64,8 +80,10 @@ final class ExerciseTemplateEditStore: ExerciseChildEditStore {
         delegate?.childDidChange()
     }
     
-    func addWarmupSets (_ count: Int) {
+    func addWarmupSets (_ count: Int?) {
+        guard let count = count, count > 0 else { return }
         for setTemplate in setTemplates {
+            print(setTemplate.setDTO.order)
             setTemplate.setOrder(setTemplate.setDTO.order + count)
         }
         

@@ -9,7 +9,9 @@ struct ExerciseTemplateView: View {
     
     @Binding var replaceExercisePayload: ReplaceExercisePayload?
     
-    let numpadHost: _NumpadHost
+    let numpadHost: NumpadHost
+    let standaloneNumpadHost: FocusOnlyHost
+    let proxy: ScrollViewProxy
     
     var body: some View {
         VStack (spacing: 16) {
@@ -31,12 +33,15 @@ struct ExerciseTemplateView: View {
                 Spacer(minLength: 8)
                 
                 MorphMenuView(
+                    numpadHost: standaloneNumpadHost,
                     config: .init(
                         alignment: .topTrailing,
                         cornerRadius: 12,
                         extraBounce: 8,
                         animation: .smooth(duration: 0.3)
-                    )) {
+                    ),
+                    proxy: proxy,
+                    ) {
                         Image(systemName: "ellipsis")
                             .foregroundStyle(.white)
                             .font(.footnote)
@@ -47,9 +52,18 @@ struct ExerciseTemplateView: View {
                             }
                     } menu: { close in
                         EditExerciseChildMenu(
-                            editStore: editStore,
-                            replaceExercisePayload: $replaceExercisePayload,
-                            pageAnimation: .smooth(duration: 0.3)) { onClosed in
+                            settings: editStore.exerciseChildDTO.settings,
+                            standaloneNumpadHost: standaloneNumpadHost,
+                            pageAnimation: .smooth(duration: 0.3)) { count in
+                                editStore.addWarmupSets(count)
+                            } onUpdateRestTimers: { warmup, working in
+                                editStore.updateRestTimers(warmup: warmup, working: working)
+                            }
+                            onReplaceExercise: {
+                                replaceExercisePayload = .init(exerciseId: editStore.exerciseChildDTO.id)
+                            } onDeleteSelf: {
+                                editStore.deleteSelf()
+                            } close: { onClosed in
                                 close {
                                     onClosed()
                                 }
@@ -74,7 +88,7 @@ struct ExerciseTemplateView: View {
             }
             
             ForEach(editStore.setTemplates) { setTemplate in
-                SetTemplateView(editStore: setTemplate, numpadHost: numpadHost)
+                SetTemplateView(editStore: setTemplate, numpadHost: numpadHost, standaloneNumpadHost: standaloneNumpadHost)
                     .transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
             }
             

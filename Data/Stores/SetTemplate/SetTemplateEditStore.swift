@@ -10,14 +10,20 @@ final class SetTemplateEditStore: @MainActor SetChildEditStore {
     let id: UUID
     @Published var setDTO: DTO
     
-    let weightTargetFieldId = UUID()
-    
     weak var delegate: (any WorkoutTemplateChildDelegate)?
     
     let parentEditStore: ExerciseTemplateEditStore
     
     @Published private(set) var _setTypeDisplay: String = "-"
-    @Published private(set) var restTemplate: RestTemplateEditStore?
+    
+    let weightTargetFieldId = UUID()
+    let restFieldId = UUID()
+    
+    enum UpdateSource {
+        case view, external
+    }
+    
+    let restDidChangeExternal = PassthroughSubject<Int, Never>()
     
     static func == (lhs: SetTemplateEditStore, rhs: SetTemplateEditStore) -> Bool {
         lhs.setDTO.id == rhs.setDTO.id
@@ -28,12 +34,23 @@ final class SetTemplateEditStore: @MainActor SetChildEditStore {
         self.setDTO = dto
         self.delegate = delegate
         self.parentEditStore = parentEditStore
+    }
+    
+    var hasRest: Bool {
+        setDTO.restTemplate != nil
+    }
+    
+    var isWarmup: Bool {
+        setDTO.setType == .warmup
+    }
+    
+    func setRestDuration (_ seconds: Int?, source: UpdateSource = .view) {
+        guard hasRest, let seconds = seconds else { return }
+        setDTO.restTemplate!.duration = max(0, seconds)
+        delegate?.childDidChange()
         
-        if let restTemplate = dto.restTemplate {
-            self.restTemplate = .init(
-                dto: restTemplate,
-                parentEditStore: self
-            )
+        if source == .external {
+            restDidChangeExternal.send(seconds)
         }
     }
     
@@ -77,34 +94,27 @@ final class SetTemplateEditStore: @MainActor SetChildEditStore {
     }
     
     func addRestTemplate () {
-        guard restTemplate == nil else { return }
-        
-        let dto = RestTemplate(duration: 0)
-        setDTO.restTemplate = dto
-        
-        let store = RestTemplateEditStore(dto: dto, parentEditStore: self)
-        self.restTemplate = store
+        guard !hasRest else { return }
+        let duration = isWarmup ? parentEditStore.exerciseChildDTO.settings.warmupRestDuration : parentEditStore.exerciseChildDTO.settings.setRestDuration
+        setDTO.restTemplate = RestTemplate(duration: duration)
         delegate?.childDidChange()
     }
     
     func removeRestTemplate () {
-        guard restTemplate != nil else { return }
+        guard hasRest else { return }
         setDTO.restTemplate = nil
-        
-        self.restTemplate = nil
         delegate?.childDidChange()
     }
     
     func snapshot () -> DTO {
-        setDTO.restTemplate = restTemplate?.dto ?? nil
         return setDTO
     }
     
     func getLocalFieldsOrder () -> [UUID] {
         var final: [UUID] = [weightTargetFieldId]
         
-        if restTemplate != nil {
-            final.append(restTemplate!.uid)
+        if setDTO.restTemplate != nil {
+            final.append(restFieldId)
         }
         
         return final

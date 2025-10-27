@@ -9,7 +9,8 @@ struct ExerciseSessionView: View {
     
     @Binding var replaceExercisePayload: ReplaceExercisePayload?
     
-    let numpadHost: _NumpadHost
+    let numpadHost: NumpadHost
+    let standaloneNumpadHost: FocusOnlyHost
     
     var body: some View {
         VStack (spacing: 16) {
@@ -31,6 +32,7 @@ struct ExerciseSessionView: View {
                 Spacer(minLength: 8)
                 
                 MorphMenuView(
+                    numpadHost: standaloneNumpadHost,
                     config: .init(
                         alignment: .topTrailing,
                         cornerRadius: 12,
@@ -47,9 +49,17 @@ struct ExerciseSessionView: View {
                             }
                     } menu: { close in
                         EditExerciseChildMenu(
-                            editStore: editStore,
-                            replaceExercisePayload: $replaceExercisePayload,
-                            pageAnimation: .smooth(duration: 0.3)) { onClosed in
+                            settings: editStore.exerciseChildDTO.settings,
+                            standaloneNumpadHost: standaloneNumpadHost,
+                            pageAnimation: .smooth(duration: 0.3)) { count in
+                                editStore.addWarmupSets(count)
+                            } onUpdateRestTimers: { warmup, working in
+                                print("\(warmup), \(working)")
+                            } onReplaceExercise: {
+                                replaceExercisePayload = .init(exerciseId: editStore.exerciseChildDTO.id)
+                            } onDeleteSelf: {
+                                editStore.deleteSelf()
+                            } close: { onClosed in
                                 close {
                                     onClosed()
                                 }
@@ -84,7 +94,7 @@ struct ExerciseSessionView: View {
             .padding(.horizontal, 6)
             
             ForEach(editStore.setSessions) { setSession in
-                SetSessionView(editStore: setSession, numpadHost: numpadHost)
+                SetSessionView(editStore: setSession, numpadHost: numpadHost, standaloneNumpadHost: standaloneNumpadHost)
                     .transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
             }
             

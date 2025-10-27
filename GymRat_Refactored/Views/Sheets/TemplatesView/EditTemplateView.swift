@@ -28,7 +28,8 @@ struct EditTemplateView: View {
     
     @State private var replaceExercisePayload: ReplaceExercisePayload?
     
-    @StateObject var numpadHost: _NumpadHost = .init()
+    @StateObject var numpadHost: NumpadHost = .init()
+    @StateObject var standaloneNumpadHost: FocusOnlyHost = .init()
     
     @State private var hidePropertyMenu: Bool = false
     
@@ -40,7 +41,9 @@ struct EditTemplateView: View {
                         ExerciseTemplateView(
                             editStore: exerciseTemplate,
                             replaceExercisePayload: $replaceExercisePayload,
-                            numpadHost: numpadHost
+                            numpadHost: numpadHost,
+                            standaloneNumpadHost: standaloneNumpadHost,
+                            proxy: proxy
                         )
                     }
                 }
@@ -64,12 +67,7 @@ struct EditTemplateView: View {
                 topBar()
                     .frame(maxWidth: .infinity)
             }
-            .safeAreaInset(edge: .bottom) {
-                if numpadHost.activeId != nil {
-                    NumpadRepresentable(host: numpadHost)
-                        .frame(height: 264)
-                }
-            }
+            .keyboardInset(host: numpadHost)
             .ignoresSafeArea(edges: [.bottom])
             .overlay (alignment: .bottomTrailing) {
                 if !hidePropertyMenu {
@@ -353,7 +351,7 @@ struct EditTemplateView: View {
         .padding(.bottom)
         .padding(.top, 55)
         .frame(maxWidth: .infinity)
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadii: .init(bottomLeading: 12, bottomTrailing: 12)))
+        .glassEffect(.regular.interactive(false), in: .rect(cornerRadii: .init(bottomLeading: 12, bottomTrailing: 12)))
         .compositingGroup()
         .shadow(color: .black.opacity(0.1), radius: 4, y: 4)
     }

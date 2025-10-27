@@ -7,14 +7,20 @@ struct FieldCellRepresentable: UIViewRepresentable {
     @Binding var text: String
     
     let id: FieldID
-    let host: _NumpadHost
-    let inputPolicy: _InputPolicy
+    let host: any NumpadHosting
+    let inputPolicy: InputPolicy
     let config: FieldConfig
 
     final class Coordinator {
-        let host: _NumpadHost
+        let host: any NumpadHosting
         let id: FieldID
-        init(host: _NumpadHost, id: FieldID) { self.host = host; self.id = id }
+        init(
+            host: any NumpadHosting,
+            id: FieldID
+        ) {
+            self.host = host
+            self.id = id
+        }
     }
     func makeCoordinator() -> Coordinator { Coordinator(host: host, id: id) }
 

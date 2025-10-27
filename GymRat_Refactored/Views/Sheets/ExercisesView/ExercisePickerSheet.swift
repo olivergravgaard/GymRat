@@ -70,7 +70,7 @@ struct ExercisePickerSheet: View {
         }
         .padding()
         .frame(maxWidth: .infinity)
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadii: .init(bottomLeading: 12, bottomTrailing: 12)))
+        .glassEffect(.regular.interactive(false), in: .rect(cornerRadii: .init(bottomLeading: 12, bottomTrailing: 12)))
         .compositingGroup()
         .shadow(color: .black.opacity(0.1), radius: 4, y: 4)
     }

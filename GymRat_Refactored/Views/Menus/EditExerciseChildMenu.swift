@@ -9,25 +9,56 @@ struct EditExerciseChildMenu: View {
         case updateRestTimers
     }
     
-    let editStore: any ExerciseChildEditStore
-    @Binding var replaceExercisePayload: ReplaceExercisePayload?
+    let settings: ExerciseSettings
+    let standaloneNumpadHost: FocusOnlyHost
     let pageAnimation: Animation
+    let onAddWarmupSets: (Int?) -> Void
+    let onUpdateRestTimers: (_ warmup: Int?, _ working: Int?) -> Void
+    let onReplaceExercise: () -> Void
+    let onDeleteSelf: () -> Void
     let close: (@escaping () -> Void) -> Void
+    
+    
     @State private var state: SectionState = .initial
     @State private var goingBack: Bool = false
     
-    @State private var showReplaceExerciseSheet: Bool = false
+    @State private var addWarmupSetsFieldId: UUID = UUID()
+    @State private var addWarmupSetsText: String = "0"
+    
+    @State private var warmupRestTimerFieldId: UUID = UUID()
+    @State private var warmupRestTimerText: String = ""
+    var initialWarmupRestTimerText: String {
+        return formatRest(settings.warmupRestDuration)
+    }
+    
+    @State private var workingRestTimerFieldId: UUID = UUID()
+    @State private var workingRestTimerText: String = ""
+    var initalWorkingRestTimerText: String {
+        return formatRest(settings.setRestDuration)
+    }
     
     init(
-        editStore: any ExerciseChildEditStore,
-        replaceExercisePayload: Binding<ReplaceExercisePayload?>,
+        settings: ExerciseSettings,
+        standaloneNumpadHost: FocusOnlyHost,
         pageAnimation: Animation,
+        onAddWarmupSets: @escaping (Int?) -> Void,
+        onUpdateRestTimers: @escaping (_ warmup: Int?, _ working: Int?) -> Void,
+        onReplaceExercise: @escaping () -> Void,
+        onDeleteSelf:  @escaping () -> Void,
         close: @escaping (@escaping () -> Void) -> Void,
     ) {
-        self.editStore = editStore
-        self._replaceExercisePayload = replaceExercisePayload
+        self.settings = settings
+        self.standaloneNumpadHost = standaloneNumpadHost
         self.pageAnimation = pageAnimation
+        self.onAddWarmupSets = onAddWarmupSets
+        self.onUpdateRestTimers = onUpdateRestTimers
+        self.onReplaceExercise = onReplaceExercise
+        self.onDeleteSelf = onDeleteSelf
         self.close = close
+        
+        self._warmupRestTimerText = State(initialValue: initialWarmupRestTimerText)
+        self._workingRestTimerText = State(initialValue: initalWorkingRestTimerText)
+        
     }
     
     var body: some View {
@@ -45,8 +76,8 @@ struct EditExerciseChildMenu: View {
         .frame(width: 220)
         .transition(
             .asymmetric(
-                insertion: .move(edge: goingBack ? .leading : .trailing).combined(with: .scale(scale: 0.7, anchor: goingBack ? .topLeading : .topTrailing)),
-                removal: .move(edge: goingBack ? .trailing : .leading).combined(with: .scale(scale: 0.7, anchor: goingBack ? .topTrailing : .topLeading))
+                insertion: .move(edge: goingBack ? .leading : .trailing).combined(with: .scale(scale: 0.8, anchor: goingBack ? .topLeading : .topTrailing)),
+                removal: .move(edge: goingBack ? .trailing : .leading).combined(with: .scale(scale: 0.8, anchor: goingBack ? .topTrailing : .topLeading))
             )
         )
     }
@@ -61,24 +92,22 @@ struct EditExerciseChildMenu: View {
             }
             
             labelView(title: "Add warmup sets", image: "plusminus") {
-                close {
-                    editStore.addWarmupSets(3)
-                }
+                navigate(to: .addWarmupSets, goingBack: false)
             }
             
             labelView(title: "Update rest timers", image: "timer") {
-                
+                navigate(to: .updateRestTimers, goingBack: false)
             }
             
             labelView(title: "Replace exercise", image: "arrow.trianglehead.2.clockwise") {
                 close {
-                    replaceExercisePayload = .init(exerciseId: editStore.exerciseChildDTO.id)
+                    onReplaceExercise()
                 }
             }
             
             Button {
                 close {
-                    editStore.deleteSelf()
+                    onDeleteSelf()
                 }
             } label: {
                 Image(systemName: "trash")
@@ -90,6 +119,14 @@ struct EditExerciseChildMenu: View {
                     .background(RoundedRectangle(cornerRadius: 12).fill(.red))
             }
             .padding(.top)
+        }
+    }
+    
+    private func navigate (to destination: SectionState, goingBack: Bool) {
+        if standaloneNumpadHost.activeId != nil { standaloneNumpadHost.setActive(nil)}
+        self.goingBack = goingBack
+        withAnimation(.snappy(duration: 0.3)) {
+            state = destination
         }
     }
     
@@ -112,15 +149,110 @@ struct EditExerciseChildMenu: View {
             .frame(height: 44)
         }
     }
-
-    @ViewBuilder
-    func addWarmupSetsView () -> some View {
-        
-    }
     
     @ViewBuilder
     func updateRestTimersView () -> some View {
-        
+        VStack {
+            HStack {
+                DismissButton {
+                    navigate(to: .initial, goingBack: true)
+                }
+                
+                Text("Update rest timers")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.gray)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            
+            FieldRow(
+                id: warmupRestTimerFieldId,
+                host: standaloneNumpadHost,
+                inputPolicy: InputPolicies.time(limit: .hours, allowedNegative: false),
+                config: .init(),
+                text: $warmupRestTimerText
+            )
+            .frame(maxWidth: .infinity, alignment: .center)
+            .frame(height: 44, alignment: .center)
+            .onAppear {
+                standaloneNumpadHost.setActive(warmupRestTimerFieldId)
+            }
+            
+            FieldRow(
+                id: workingRestTimerFieldId,
+                host: standaloneNumpadHost,
+                inputPolicy: InputPolicies.time(limit: .hours, allowedNegative: false),
+                config: .init(),
+                text: $workingRestTimerText
+            )
+            .frame(maxWidth: .infinity, alignment: .center)
+            .frame(height: 44, alignment: .center)
+            
+            Button {
+                close {
+                    onUpdateRestTimers(parseNormalizedRest(warmupRestTimerText), parseNormalizedRest(workingRestTimerText))
+                }
+            } label: {
+                Text("Update")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(height: 44, alignment: .center)
+                    .background {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.indigo)
+                    }
+            }
+        }
+    }
+
+    @ViewBuilder
+    func addWarmupSetsView () -> some View {
+        VStack {
+            HStack {
+                DismissButton {
+                    navigate(to: .initial, goingBack: true)
+                }
+                
+                Text("Add warmup sets")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.gray)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            
+            FieldRow(
+                id: addWarmupSetsFieldId,
+                host: standaloneNumpadHost,
+                inputPolicy: InputPolicies.digitsOnly(maxDigits: 1, allowNegative: false),
+                config: .init(),
+                text: $addWarmupSetsText
+            )
+            .frame(maxWidth: .infinity, alignment: .center)
+            .frame(height: 44, alignment: .center)
+            .onAppear {
+                standaloneNumpadHost.setActive(addWarmupSetsFieldId)
+            }
+            
+            Button {
+                close {
+                    onAddWarmupSets(parse(addWarmupSetsText))
+                }
+            } label: {
+                Text("Add")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(height: 44, alignment: .center)
+                    .background {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.indigo)
+                    }
+            }
+
+        }
     }
 }
 

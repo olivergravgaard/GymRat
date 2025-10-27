@@ -160,9 +160,9 @@ public final class FieldView: UIView, FieldEndpoint {
     private var lineLayout: LineLayout!
     
     public private(set) var id: FieldID = .init()
-    public var inputPolicy: _InputPolicy
+    public var inputPolicy: InputPolicy
     public func apply(_ value: NumericValue) { setValue(value, animated: false) }
-    weak var host: _NumpadHost?
+    weak var host: (any NumpadHosting)?
     private(set) var metrics: FieldMetrics = .init(font: .monospacedSystemFont(ofSize: 18, weight: .regular))
     private var config: FieldConfig
     public var insets: FieldInsets = .default { didSet { setNeedsLayout() } }
@@ -202,8 +202,7 @@ public final class FieldView: UIView, FieldEndpoint {
     
     private let placeholderLayer = CATextLayer()
 
-
-    public init (inputPolicy: _InputPolicy, config: FieldConfig) {
+    public init (inputPolicy: InputPolicy, config: FieldConfig) {
         self.inputPolicy = inputPolicy
         self.config = config
         super.init(frame: .zero)
@@ -307,7 +306,7 @@ public final class FieldView: UIView, FieldEndpoint {
 
     public func configure(
         id: FieldID,
-        host: _NumpadHost,
+        host: any NumpadHosting,
         initial: NumericValue,
         config: FieldConfig
     ) {

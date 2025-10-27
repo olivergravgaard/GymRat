@@ -1,4 +1,4 @@
-import Foundation
+/*import Foundation
 import SwiftUI
 import UIKit
 import Combine
@@ -1514,5 +1514,5 @@ final class KeyboardManager {
 
 protocol KeyboardTarget: AnyObject {
     func onKey (_ action: KeyAction)
-}
+}*/
 

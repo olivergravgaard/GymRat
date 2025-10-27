@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 struct FieldsListView: View {
-    @ObservedObject var host: _NumpadHost
+    @ObservedObject var host: NumpadHost
 
     var rowHeight: CGFloat = 32
     var rowSpacing: CGFloat = 8
@@ -90,7 +90,7 @@ struct FieldsListView: View {
 }
 
 struct DemoScreen: View {
-    @StateObject private var host = _NumpadHost()
+    @StateObject private var host = NumpadHost()
     @State private var ids: [FieldID] = [
         FieldID(),
         FieldID(),
@@ -117,7 +117,7 @@ struct DemoScreen: View {
         }
         .safeAreaInset(edge: .bottom) {
             if host.activeId != nil {
-                NumpadRepresentable(host: host)
+                NumpadRepresentable(host: host, activeId: host.activeId)
                     .frame(height: 264)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
