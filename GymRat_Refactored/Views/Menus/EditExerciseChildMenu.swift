@@ -14,6 +14,7 @@ struct EditExerciseChildMenu: View {
     let pageAnimation: Animation
     let onAddWarmupSets: (Int?) -> Void
     let onUpdateRestTimers: (_ warmup: Int?, _ working: Int?) -> Void
+    let onAddRestTimers: () -> Void
     let onReplaceExercise: () -> Void
     let onDeleteSelf: () -> Void
     let close: (@escaping () -> Void) -> Void
@@ -43,6 +44,7 @@ struct EditExerciseChildMenu: View {
         pageAnimation: Animation,
         onAddWarmupSets: @escaping (Int?) -> Void,
         onUpdateRestTimers: @escaping (_ warmup: Int?, _ working: Int?) -> Void,
+        onAddRestTimers: @escaping () -> Void,
         onReplaceExercise: @escaping () -> Void,
         onDeleteSelf:  @escaping () -> Void,
         close: @escaping (@escaping () -> Void) -> Void,
@@ -52,6 +54,7 @@ struct EditExerciseChildMenu: View {
         self.pageAnimation = pageAnimation
         self.onAddWarmupSets = onAddWarmupSets
         self.onUpdateRestTimers = onUpdateRestTimers
+        self.onAddRestTimers = onAddRestTimers
         self.onReplaceExercise = onReplaceExercise
         self.onDeleteSelf = onDeleteSelf
         self.close = close
@@ -97,6 +100,12 @@ struct EditExerciseChildMenu: View {
             
             labelView(title: "Update rest timers", image: "timer") {
                 navigate(to: .updateRestTimers, goingBack: false)
+            }
+            
+            labelView(title: "Add rest timers", image: "text.badge.plus") {
+                close {
+                    onAddRestTimers()
+                }
             }
             
             labelView(title: "Replace exercise", image: "arrow.trianglehead.2.clockwise") {

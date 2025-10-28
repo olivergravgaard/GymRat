@@ -132,7 +132,7 @@ struct SetTemplateView: View {
                         font: .caption,
                         size: .init(width: 44, height: 44)) { close in
                             close {
-                                withAnimation (.snappy(duration: 0.3)) {
+                                withAnimation(.snappy(duration: 0.3)) {
                                     editStore.addRestTemplate()
                                 }
                             }
@@ -140,83 +140,83 @@ struct SetTemplateView: View {
                 }
             
             if editStore.hasRest {
-                FieldRow(
-                    id: editStore.restFieldId,
-                    host: numpadHost,
-                    inputPolicy: InputPolicies.time(limit: .hours, allowedNegative: false),
-                    config: .init(
-                        font: .systemFont(ofSize: 12, weight: .semibold),
-                        textColor: .white,
-                        selectionColor: .white,
-                        caretColor: .white,
-                        insets: .init(top: 0, left: 0, bottom: 4, right: 4),
-                        alignment: .center,
-                        actions: .init(
-                            onBecomeActive: {
-                                
-                                withAnimation {
-                                    restActive = true
+                Group {
+                    FieldRow(
+                        id: editStore.restFieldId,
+                        host: numpadHost,
+                        inputPolicy: InputPolicies.time(limit: .hours, allowedNegative: false),
+                        config: .init(
+                            font: .systemFont(ofSize: 12, weight: .semibold),
+                            textColor: .white,
+                            selectionColor: .white,
+                            caretColor: .white,
+                            insets: .init(top: 0, left: 0, bottom: 4, right: 4),
+                            alignment: .center,
+                            actions: .init(
+                                onBecomeActive: {
+                                    
+                                    withAnimation {
+                                        restActive = true
+                                    }
+                                    
+                                    return false
+                                }, onResignActive: {
+                                    
+                                    withAnimation {
+                                        restActive = false
+                                    }
+                                    
+                                    return false
                                 }
-                                
-                                return false
-                            }, onResignActive: {
-                                
-                                withAnimation {
-                                    restActive = false
-                                }
-                                
-                                return false
-                            }
+                            ),
+                            placeholderText: "-",
+                            placeholderColor: UIColor.white.withAlphaComponent(0.8),
                         ),
-                        placeholderText: "-",
-                        placeholderColor: UIColor.white.withAlphaComponent(0.8),
-                    ),
-                    text: $restText
-                )
-                .transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
-                .frame(maxWidth: .infinity, alignment: .center)
-                .frame(height: restActive ? 24 : 14 + (10 * restSwipeProgress), alignment: .center)
-                .background {
-                    RoundedRectangle(cornerRadius: 12).fill(.indigo)
-                }
-                .onAppear(perform: {
-                    restText = formatRest(editStore.setDTO.restTemplate?.duration)
-                    Task {
-                        numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
+                        text: $restText
+                    )
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(height: restActive ? 24 : 14 + (10 * restSwipeProgress), alignment: .center)
+                    .background {
+                        RoundedRectangle(cornerRadius: 12).fill(.indigo)
                     }
-                })
-                .onChange(of: restText, { _, _ in
-                    commitRest()
-                })
-                .onReceive(editStore.restDidChangeExternal, perform: { seconds in
-                    print("Received")
-                    let formatted = formatRest(seconds)
-                    restText = formatted
-                })
-                .swipeActions(
-                    config: .init(
-                        leadingPadding: 8,
-                        trailingPadding: 8,
-                        spacing: 8,
-                        occupiesFullWidth: false
-                    ), progress: $restSwipeProgress) {
-                        SwipeAction(
-                            symbolImage: "trash",
-                            tint: .red,
-                            background: .red.opacity(0.1),
-                            font: .caption,
-                            size: .init(width: 24, height: 24)) { close in
-                                close{
-                                    withAnimation(.snappy(duration: 0.3)) {
-                                        editStore.removeRestTemplate()
-                                    } completion: {
-                                        Task {
-                                            numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
+                    .onAppear(perform: {
+                        restText = formatRest(editStore.setDTO.restTemplate?.duration)
+                        Task {
+                            numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
+                        }
+                    })
+                    .onChange(of: restText, { _, _ in
+                        commitRest()
+                    })
+                    .onReceive(editStore.restDidChangeExternal, perform: { seconds in
+                        let formatted = formatRest(seconds)
+                        restText = formatted
+                    })
+                    .swipeActions(
+                        config: .init(
+                            leadingPadding: 8,
+                            trailingPadding: 8,
+                            spacing: 8,
+                            occupiesFullWidth: false
+                        ), progress: $restSwipeProgress) {
+                            SwipeAction(
+                                symbolImage: "trash",
+                                tint: .red,
+                                background: .red.opacity(0.1),
+                                font: .caption,
+                                size: .init(width: 24, height: 24)) { close in
+                                    close{
+                                        withAnimation(.snappy(duration: 0.3)) {
+                                            editStore.removeRestTemplate()
+                                        } completion: {
+                                            Task {
+                                                numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
+                                            }
                                         }
                                     }
                                 }
-                            }
-                    }
+                        }
+                }
             }
         }
     }

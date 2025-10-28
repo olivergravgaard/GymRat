@@ -55,9 +55,15 @@ struct ExerciseTemplateView: View {
                             settings: editStore.exerciseChildDTO.settings,
                             standaloneNumpadHost: standaloneNumpadHost,
                             pageAnimation: .smooth(duration: 0.3)) { count in
-                                editStore.addWarmupSets(count)
+                                withAnimation(.snappy(duration: 0.3)) {
+                                    editStore.addWarmupSets(count)
+                                }
                             } onUpdateRestTimers: { warmup, working in
                                 editStore.updateRestTimers(warmup: warmup, working: working)
+                            } onAddRestTimers: {
+                                withAnimation(.snappy(duration: 0.3)) {
+                                    editStore.addMissingRestTemplates()
+                                }
                             }
                             onReplaceExercise: {
                                 replaceExercisePayload = .init(exerciseId: editStore.exerciseChildDTO.id)

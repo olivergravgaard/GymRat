@@ -39,17 +39,29 @@ final class ExerciseTemplateEditStore: ExerciseChildEditStore {
         delegate?.childDidChange()
     }
     
-    func updateRestTimers (warmup: Int?, working: Int?) {
-        setTemplates.filter(\.hasRest).forEach {
-            $0.setRestDuration($0.isWarmup ? warmup : working, source: .external)
+    func addMissingRestTemplates () {
+        let toAdd = setTemplates.filter { $0.hasRest == false}
+        
+        guard toAdd.count > 0 else { return }
+        
+        toAdd.forEach {
+            $0.addRestTemplate()
         }
         
+        delegate?.childDidChange()
+    }
+    
+    func updateRestTimers (warmup: Int?, working: Int?) {
         if let warmup = warmup {
             exerciseChildDTO.settings.warmupRestDuration = warmup
         }
         
         if let working = working {
             exerciseChildDTO.settings.setRestDuration = working
+        }
+        
+        setTemplates.filter(\.hasRest).forEach {
+            $0.setRestDuration($0.isWarmup ? warmup : working, source: .external)
         }
         
         delegate?.childDidChange()
@@ -78,12 +90,14 @@ final class ExerciseTemplateEditStore: ExerciseChildEditStore {
         let store = SetTemplateEditStore(dto: dto, delegate: delegate, parentEditStore: self)
         setTemplates.append(store)
         delegate?.childDidChange()
+        
+        recomputeSetTypeDisplays()
     }
     
     func addWarmupSets (_ count: Int?) {
         guard let count = count, count > 0 else { return }
+        
         for setTemplate in setTemplates {
-            print(setTemplate.setDTO.order)
             setTemplate.setOrder(setTemplate.setDTO.order + count)
         }
         
@@ -110,6 +124,8 @@ final class ExerciseTemplateEditStore: ExerciseChildEditStore {
         setTemplates.append(contentsOf: warmupSets)
         setTemplates.sort(by: { $0.setDTO.order < $1.setDTO.order })
         delegate?.childDidChange()
+        
+        recomputeSetTypeDisplays()
     }
     
     func removeSet (_ id: UUID) {

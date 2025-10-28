@@ -125,6 +125,7 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
     // View properties
     @State private var labelRect: CGRect = .zero
     @State private var contentSize: CGSize = .zero
+    @State private var normalizedAlignment: Alignment = .center
     
     var animatableData: CGFloat {
         get { progress }
@@ -133,11 +134,15 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
     
     func body (content: Content) -> some View {
         content
+            .onAppear(perform: {
+                normalizedAlignment = getAlignment()
+            })
             .opacity(ogLabelOpacity)
             .onGeometryChange(for: CGRect.self, of: {
                 $0.frame(in: .global)
             }, action: { newValue in
                 labelRect = newValue
+                normalizedAlignment = getAlignment()
             })
             .fullScreenCover(isPresented: $isPresented) {
                 ZStack (alignment: .topLeading) {
@@ -161,7 +166,7 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
                         let labelWidth: CGFloat = contentSize.width >= labelRect.width ? labelRect.width : popupWidth
                         let labelHeight: CGFloat = contentSize.height >= labelRect.height ? labelRect.height : popupHeight
                         
-                        ZStack (alignment: alignment) {
+                        ZStack (alignment: normalizedAlignment) {
                             popup
                                 .compositingGroup()
                                 .scaleEffect(contentScale)
@@ -260,6 +265,106 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
         return progress > 0.5 ? (1 - progress) / 0.5 : progress / 0.5
     }
     
+    func getAlignment() -> Alignment {
+        var normalizedAlignment: Alignment = .center
+        let screenWidth = UIScreen.main.bounds.width
+        let screenHeight = UIScreen.main.bounds.height
+        
+        var overlapsMinY: Bool {
+            labelRect.maxY - contentSize.height <= 0
+        }
+        
+        var overlapsMaxY: Bool {
+            labelRect.minY + contentSize.height >= screenHeight
+        }
+        
+        var overlapsMinX: Bool {
+            labelRect.maxX - contentSize.width <= 0
+        }
+        
+        var overlapsMaxX: Bool {
+            labelRect.minX + contentSize.width >= screenWidth
+        }
+        
+        switch alignment {
+            case .bottom:
+                if overlapsMinY {
+                    return .top
+                }
+            case .bottomTrailing:
+                if overlapsMinY {
+                    if overlapsMinX {
+                        return .topLeading
+                    }
+                    
+                    return .topTrailing
+                }else if overlapsMinX {
+                    return .bottomLeading
+                }else {
+                    return alignment
+                }
+            
+            case .bottomLeading:
+                if overlapsMinY {
+                    if overlapsMaxX {
+                        return .topTrailing
+                    }
+                    
+                    return .topLeading
+                }else if overlapsMaxX {
+                    return .bottomTrailing
+                }else {
+                    return alignment
+                }
+            case .leading:
+                if overlapsMaxX {
+                    return .trailing
+                }
+            
+                return alignment
+            case .trailing:
+                if overlapsMinX {
+                    return .leading
+                }
+                return alignment
+            case .topLeading:
+                if overlapsMaxY {
+                    if overlapsMaxX {
+                        return .bottomTrailing
+                    }
+                    
+                    return .bottomLeading
+                }else if overlapsMaxX {
+                    return .topTrailing
+                }else {
+                    return alignment
+                }
+            case .top:
+                if overlapsMaxY {
+                    return .bottom
+                }
+            
+                return alignment
+            case .topTrailing:
+                if overlapsMaxY {
+                    if overlapsMinX {
+                        return .bottomLeading
+                    }
+                    
+                    return .bottomTrailing
+                }else if overlapsMinX {
+                    return .topLeading
+                }else {
+                    return alignment
+                }
+            
+            default:
+                return .center
+        }
+        
+        return .center
+    }
+    
     var offset: CGSize {
         var x: CGFloat = 0
         var y: CGFloat = 0
@@ -273,36 +378,36 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
             widthDiff = -(labelRect.width - contentSize.width)
         }
         
-        switch alignment {
-        case .bottom:
-            x -= (widthDiff) / 2
-            y -= contentSize.height - labelRect.height
-            yExtra -= extraBounce
-        case .bottomTrailing:
-            x -= widthDiff
-            y -= contentSize.height - labelRect.height
-            yExtra -= extraBounce
-        case .bottomLeading:
-            y -= contentSize.height - labelRect.height
-            yExtra -= extraBounce
-        case .leading:
-            y -= (contentSize.height - labelRect.height) / 2
-            xExtra -= extraBounce
-        case .center:
-            x -= widthDiff / 2
-            y -= (contentSize.height - labelRect.height) / 2
-        case .trailing:
-            x -= widthDiff
-            y -= (contentSize.height - labelRect.height) / 2
-            xExtra += extraBounce
-        case .topLeading:
-            yExtra += extraBounce
-        case .top:
-            x -= widthDiff / 2
-            yExtra += extraBounce
-        case .topTrailing:
-            x -= widthDiff
-            yExtra += extraBounce
+        switch normalizedAlignment {
+            case .bottom:
+                x -= (widthDiff) / 2
+                y -= contentSize.height - labelRect.height
+                yExtra -= extraBounce
+            case .bottomTrailing:
+                x -= widthDiff
+                y -= contentSize.height - labelRect.height
+                yExtra -= extraBounce
+            case .bottomLeading:
+                y -= contentSize.height - labelRect.height
+                yExtra -= extraBounce
+            case .leading:
+                y -= (contentSize.height - labelRect.height) / 2
+                xExtra -= extraBounce
+            case .center:
+                x -= widthDiff / 2
+                y -= (contentSize.height - labelRect.height) / 2
+            case .trailing:
+                x -= widthDiff
+                y -= (contentSize.height - labelRect.height) / 2
+                xExtra += extraBounce
+            case .topLeading:
+                yExtra += extraBounce
+            case .top:
+                x -= widthDiff / 2
+                yExtra += extraBounce
+            case .topTrailing:
+                x -= widthDiff
+                yExtra += extraBounce
             
         default: break
         }
@@ -316,7 +421,7 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
     }
     
     var scaleAnchor: UnitPoint {
-        switch alignment {
+        switch normalizedAlignment {
         case .bottomLeading: .bottomLeading
         case .bottom: .bottom
         case .bottomTrailing: .bottomTrailing

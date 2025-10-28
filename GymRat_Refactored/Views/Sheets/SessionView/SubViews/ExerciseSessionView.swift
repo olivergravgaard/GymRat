@@ -54,8 +54,11 @@ struct ExerciseSessionView: View {
                             pageAnimation: .smooth(duration: 0.3)) { count in
                                 editStore.addWarmupSets(count)
                             } onUpdateRestTimers: { warmup, working in
-                                print("\(warmup), \(working)")
-                            } onReplaceExercise: {
+                                
+                            } onAddRestTimers: {
+                                
+                            }
+                            onReplaceExercise: {
                                 replaceExercisePayload = .init(exerciseId: editStore.exerciseChildDTO.id)
                             } onDeleteSelf: {
                                 editStore.deleteSelf()
