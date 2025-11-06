@@ -5,7 +5,8 @@ struct MorphMenuConfig {
     let alignment: Alignment
     let cornerRadius: CGFloat
     let extraBounce: CGFloat
-    var animation: Animation = .bouncy(duration: 0.5, extraBounce: 0)
+    var animation: Animation = .snappy(duration: 0.3, extraBounce: 0)
+    var backgroundTapable: Bool = true
 }
 
 struct MorphMenuView<Label: View, Menu: View, Host: NumpadHosting>: View {
@@ -16,6 +17,7 @@ struct MorphMenuView<Label: View, Menu: View, Host: NumpadHosting>: View {
     let proxy: ScrollViewProxy?
     let label: () -> Label
     let menu: (_ close: @escaping (_ onClosed: @escaping () -> ()) -> ()) -> Menu
+    var onOpen: () -> ()
     
     // View properties
     @State private var id: UUID = UUID()
@@ -28,13 +30,15 @@ struct MorphMenuView<Label: View, Menu: View, Host: NumpadHosting>: View {
         config: MorphMenuConfig,
         proxy: ScrollViewProxy? = nil,
         @ViewBuilder label: @escaping () -> Label,
-        @ViewBuilder menu: @escaping (_ close: @escaping (_ onClosed: @escaping () -> ()) -> ()) -> Menu
+        @ViewBuilder menu: @escaping (_ close: @escaping (_ onClosed: @escaping () -> ()) -> ()) -> Menu,
+        onOpen: @escaping () -> () = {}
     ) {
         self.numpadHost = numpadHost
         self.config = config
         self.proxy = proxy
         self.label = label
         self.menu = menu
+        self.onOpen = onOpen
     }
     
     var body: some View {
@@ -57,6 +61,7 @@ struct MorphMenuView<Label: View, Menu: View, Host: NumpadHosting>: View {
                     alignment: config.alignment,
                     cornerRadius: config.cornerRadius,
                     extraBounce: config.extraBounce,
+                    backgroundTapable: config.backgroundTapable,
                     progress: progress) {
                         close {
                             
@@ -95,6 +100,8 @@ struct MorphMenuView<Label: View, Menu: View, Host: NumpadHosting>: View {
     }
     
     private func open () {
+        onOpen()
+        
         var trans = Transaction()
         trans.disablesAnimations = true
         withTransaction(trans) {
@@ -116,6 +123,7 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
     var alignment: Alignment
     var cornerRadius: CGFloat
     var extraBounce: CGFloat
+    var backgroundTapable: Bool
     var progress: CGFloat
     let onClose: () -> ()
     let onOpen: () -> ()
@@ -134,9 +142,6 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
     
     func body (content: Content) -> some View {
         content
-            .onAppear(perform: {
-                normalizedAlignment = getAlignment()
-            })
             .opacity(ogLabelOpacity)
             .onGeometryChange(for: CGRect.self, of: {
                 $0.frame(in: .global)
@@ -146,12 +151,18 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
             })
             .fullScreenCover(isPresented: $isPresented) {
                 ZStack (alignment: .topLeading) {
-                    Color.black.opacity(backgroundOpacity)
-                        .onTapGesture {
-                            guard progress == 1 else { return }
-                            onClose()
+                    Group {
+                        if backgroundTapable {
+                            Color.black.opacity(backgroundOpacity)
+                                .onTapGesture {
+                                    guard progress == 1 else { return }
+                                    onClose()
+                                }
+                        }else {
+                            Color.clear
                         }
-                        .zIndex(0)
+                    }
+                    .zIndex(0)
                     
                     GlassEffectContainer {
                         let widthDiff: Double = contentSize.width - labelRect.width
@@ -175,8 +186,11 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
                                 .onGeometryChange(for: CGSize.self) {
                                     $0.size
                                 } action: { newValue in
-                                    withAnimation (.smooth(duration: 0.35)) {
+                                    var trans = Transaction()
+                                    trans.disablesAnimations = true
+                                    withTransaction(trans) {
                                         contentSize = newValue
+                                        normalizedAlignment = getAlignment()
                                     }
                                 }
                                 .fixedSize()
@@ -197,7 +211,7 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
                         .zIndex(1)
                     }
                     .scaleEffect(
-                        x: 1 - (blurProgress * 0.5),
+                        x: 1 - (blurProgress * 0.1),
                         y: 1 + (blurProgress * 1),
                         anchor: scaleAnchor
                     )
@@ -266,9 +280,8 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
     }
     
     func getAlignment() -> Alignment {
-        var normalizedAlignment: Alignment = .center
-        let screenWidth = UIScreen.main.bounds.width
-        let screenHeight = UIScreen.main.bounds.height
+        let screenWidth = UIScreen.size.width
+        let screenHeight = UIScreen.size.height
         
         var overlapsMinY: Bool {
             labelRect.maxY - contentSize.height <= 0
@@ -303,7 +316,7 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
                 }else {
                     return alignment
                 }
-            
+                
             case .bottomLeading:
                 if overlapsMinY {
                     if overlapsMaxX {
@@ -320,7 +333,7 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
                 if overlapsMaxX {
                     return .trailing
                 }
-            
+                
                 return alignment
             case .trailing:
                 if overlapsMinX {
@@ -343,7 +356,7 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
                 if overlapsMaxY {
                     return .bottom
                 }
-            
+                
                 return alignment
             case .topTrailing:
                 if overlapsMaxY {
@@ -357,9 +370,18 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
                 }else {
                     return alignment
                 }
-            
-            default:
-                return .center
+                
+            case .center:
+                if overlapsMinY {
+                    return .top
+                }else if overlapsMaxY {
+                    return .bottom
+                }
+                
+                return alignment
+                
+                default:
+                    return .center
         }
         
         return .center
@@ -444,6 +466,7 @@ fileprivate extension View {
         alignment: Alignment,
         cornerRadius: CGFloat,
         extraBounce: CGFloat,
+        backgroundTapable: Bool,
         progress: CGFloat,
         onClose: @escaping () -> (),
         onOpen: @escaping () -> (),
@@ -458,6 +481,7 @@ fileprivate extension View {
                 alignment: alignment,
                 cornerRadius: cornerRadius,
                 extraBounce: extraBounce,
+                backgroundTapable: backgroundTapable,
                 progress: progress,
                 onClose: onClose,
                 onOpen: onOpen,

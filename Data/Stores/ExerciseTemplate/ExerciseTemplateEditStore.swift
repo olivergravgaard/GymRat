@@ -67,16 +67,6 @@ final class ExerciseTemplateEditStore: ExerciseChildEditStore {
         delegate?.childDidChange()
     }
     
-    func toggleRestTimer (_ value: Bool) {
-        exerciseChildDTO.settings.useRestTimer = value
-        delegate?.childDidChange()
-    }
-    
-    func setRestDuration (_ value: Int) {
-        exerciseChildDTO.settings.setRestDuration = value
-        delegate?.childDidChange()
-    }
-    
     func addSet (_ setType: SetType) {
         
         let nextOrder = (setTemplates.map { $0.setDTO.order}.max() ?? 0) + 1
@@ -94,22 +84,28 @@ final class ExerciseTemplateEditStore: ExerciseChildEditStore {
         recomputeSetTypeDisplays()
     }
     
-    func addWarmupSets (_ count: Int?) {
-        guard let count = count, count > 0 else { return }
+    func addSets (setType: SetType, count: Int) {
+        guard count > 0 else { return }
         
-        for setTemplate in setTemplates {
-            setTemplate.setOrder(setTemplate.setDTO.order + count)
+        var newSets: [SetTemplateEditStore] = []
+        newSets.reserveCapacity(count)
+        
+        if setType == .warmup {
+            setTemplates.forEach { setTemplate in
+                setTemplate.setOrder(setTemplate.setDTO.order + count)
+            }
         }
-        
-        var warmupSets: [SetTemplateEditStore] = []
-        warmupSets.reserveCapacity(count)
-        
+            
+        var setsCount = setTemplates.count
         for i in 1...count {
             let dto = SetTemplateDTO(
                 id: UUID(),
-                order: i,
-                setType: .warmup,
-                restTemplate: nil
+                order: setType == .warmup ? i : setsCount + 1,
+                weightTarget: nil,
+                minReps: nil,
+                maxReps: nil,
+                setType: setType,
+                restTemplate: getDefuaultRestSession(for: setType)
             )
             
             let store = SetTemplateEditStore(
@@ -118,14 +114,21 @@ final class ExerciseTemplateEditStore: ExerciseChildEditStore {
                 parentEditStore: self
             )
             
-            warmupSets.append(store)
+            newSets.append(store)
+            
+            setsCount += 1
         }
         
-        setTemplates.append(contentsOf: warmupSets)
+        setTemplates.append(contentsOf: newSets)
         setTemplates.sort(by: { $0.setDTO.order < $1.setDTO.order })
         delegate?.childDidChange()
         
         recomputeSetTypeDisplays()
+    }
+    
+    func getDefuaultRestSession (for setType: SetType) -> RestTemplate {
+        let isWarmup = setType == .warmup
+        return .init(duration: isWarmup ? exerciseChildDTO.settings.warmupRestDuration : exerciseChildDTO.settings.setRestDuration)
     }
     
     func removeSet (_ id: UUID) {

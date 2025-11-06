@@ -14,6 +14,7 @@ struct FieldCellRepresentable: UIViewRepresentable {
     final class Coordinator {
         let host: any NumpadHosting
         let id: FieldID
+        
         init(
             host: any NumpadHosting,
             id: FieldID
@@ -39,7 +40,6 @@ struct FieldCellRepresentable: UIViewRepresentable {
                 }
             }
         }
-        
         return v
     }
 

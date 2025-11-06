@@ -40,6 +40,11 @@ struct SessionRibbonView: View {
     @ObservedObject var store: SessionRibbonStore
 
     var onOpen: @MainActor () async -> Void
+    
+    private var progress: CGFloat {
+        guard let active = store.active else { return 0 }
+        return CGFloat(active.performedSetsCount()) / CGFloat(active.totalSetsCount())
+    }
 
     var body: some View {
         if let active = store.active {
@@ -48,49 +53,67 @@ struct SessionRibbonView: View {
                     await onOpen()
                 }
             } label: {
-                HStack (spacing: 8) {
-                    HStack (spacing: 8) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(.indigo.opacity(0.15))
                         Image(systemName: "figure.strengthtraining.traditional")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .padding(.vertical, 8)
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.indigo)
-                        
-                        Text(active.name)
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.indigo)
-                            .lineLimit(1)
                     }
+                    .frame(width: 44, height: 44)
                     
-                    ElapsedTimeLabel(startedAt: active.startedAt)
-                        .foregroundStyle(.indigo)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                    
-                    Text("\(performedSetsCount(active)) / \(totalSetsCount(active)) sets")
-                        .foregroundStyle(.indigo)
-                        .font(.caption)
-                        .fontWeight(.bold)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 8) {
+                            Text(active.name)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.black)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            
+                            HStack(spacing: 4) {
+                                Image(systemName: "clock")
+                                    .font(.caption2.weight(.semibold))
+                                ElapsedTimeLabel(startedAt: active.startedAt)
+                            }
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.gray)
+                        }
+                        
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(.indigo.opacity(0.15))
+                                .frame(height: 8)
+                            GeometryReader { geo in
+                                Capsule()
+                                    .fill(.indigo)
+                                    .frame(width: max(8, geo.size.width * progress), height: 8)
+                                    .animation(.snappy(duration: 0.25, extraBounce: 0), value: progress)
+                            }
+                            .frame(height: 8)
+                        }
+                        
+                        HStack {
+                            Text("\(active.performedSetsCount()) / \(active.totalSetsCount()) sets")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.indigo)
+                            Spacer()
+                        }
+                    }
                 }
-                .frame(height: 32)
-                .padding(.horizontal)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
                 .background {
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(.indigo, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(red: 0.937, green: 0.937, blue: 0.937))
                 }
-                .glassEffect(.regular.interactive(true), in: .rect(cornerRadius: 12))
-                .frame(maxWidth: .infinity, alignment: .center)
+                .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
+                .contentShape(.rect)
+
             }
-
+            .contentShape(.rect)
+            .glassEffect(.regular, in: .rect(cornerRadius: 12))
+            
         }
-    }
-
-    private func totalSetsCount(_ s: WorkoutSessionDTO) -> Int {
-        s.exercises.reduce(0) { $0 + $1.sets.count }
-    }
-
-    private func performedSetsCount(_ s: WorkoutSessionDTO) -> Int {
-        s.exercises.flatMap(\.sets).reduce(into: 0) { $0 += ($1.performed == true) ? 1 : 0 }
     }
 }

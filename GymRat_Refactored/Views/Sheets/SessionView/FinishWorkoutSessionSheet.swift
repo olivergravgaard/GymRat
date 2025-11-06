@@ -3,7 +3,7 @@ import SwiftUI
 
 struct FinishWorkoutSessionSheet: View {
     
-    let editStore: WorkoutSessionEditStore
+    let unPerformedSets: Int
     let onClose: () -> Void
     let onCompleteUnfinishedSets: () -> Void
     let onDiscardUnfinishedSets: () -> Void
@@ -23,8 +23,8 @@ struct FinishWorkoutSessionSheet: View {
                         }
                     }
                 
-                if editStore.hasUnperformedSets {
-                    Text("You have \(editStore.unperformedSetsCount) unperformed sets.")
+                if unPerformedSets != 0 {
+                    Text("You have \(unPerformedSets) unperformed sets.")
                         .font(.footnote)
                         .fontWeight(.semibold)
                         .multilineTextAlignment(.center)

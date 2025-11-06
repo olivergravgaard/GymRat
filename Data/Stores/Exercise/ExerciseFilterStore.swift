@@ -40,7 +40,7 @@ final class ExerciseFilterStore: ObservableObject {
     private func subscribeProviders() {
         taskExercises = Task { [weak self] in
             guard let self else { return }
-            await exerciseProvider.start()
+            await exerciseProvider.boot()
             for await list in await exerciseProvider.streamAll() {
                 self.allExercises = list
             }
@@ -63,7 +63,7 @@ final class ExerciseFilterStore: ObservableObject {
             $allExercises
                 .removeDuplicates(by: Self.sameIDsAndVersion),
             $muscleGroupNamesById
-                .removeDuplicates(by: Self.sameNameMap)
+                .removeDuplicates()
         )
         .receive(on: worker)
         .map { (search, all, nameMap) -> [SectionedByMuscleGroup] in
@@ -72,8 +72,8 @@ final class ExerciseFilterStore: ObservableObject {
         }
         .receive(on: RunLoop.main)
         .removeDuplicates(by: Self.sameSectionsByVersion)
-        .sink { [weak self] output in
-            self?.sections = output
+        .sink { [weak self] sections in
+            self?.sections = sections
         }
         .store(in: &cancellables)
     }

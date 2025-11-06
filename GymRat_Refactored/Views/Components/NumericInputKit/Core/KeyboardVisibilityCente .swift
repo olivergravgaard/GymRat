@@ -7,7 +7,7 @@ extension View {
             Group {
                 if host.activeId != nil {
                     ConcentricRectangle(corners: .concentric(minimum: 12), isUniform: true)
-                        .fill(.black.opacity(0.1))
+                        .fill(.black.opacity(0.8))
                         .frame(height: 264)
                         .frame(maxWidth: .infinity)
                         .glassEffect(.clear.interactive(false), in: .containerRelative)

@@ -18,10 +18,19 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     private var tickTask: Task<Void, Never>?
     
     @Published private(set) var setTypeDisplay: String = "-"
+    @Published private(set) var prevPerformedWeight: Double? = nil
+    @Published private(set) var prevPerformedReps: Int? = nil
     
     let weightFieldId = UUID()
     let repsFieldId = UUID()
     let restFieldId = UUID()
+    
+    enum UpdateSource {
+        case view, external
+    }
+    
+    let restDidChangeExternal = PassthroughSubject<Int, Never>()
+    let weightAndRestChangeExternal = PassthroughSubject<(Double?, Int?), Never>()
     
     static func == (lhs: SetSessionEditStore, rhs: SetSessionEditStore) -> Bool {
         lhs.setDTO.id == rhs.setDTO.id
@@ -50,13 +59,15 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
         setDTO.restSession != nil
     }
     
-    var restDuration: Int? {
-        setDTO.restSession?.duration ?? nil
+    var isWarmup: Bool {
+        return setDTO.setType == .warmup
     }
     
     func addRestSession () {
         guard !hasRest else { return }
-        setDTO.restSession = RestSession(duration: 0, startedAt: nil, endedAt: nil, restState: .idle)
+        let restSession = parentEditStore.getDefuaultRestSession(for: setDTO.setType)
+        restDidChangeExternal.send(restSession.duration)
+        setDTO.restSession = parentEditStore.getDefuaultRestSession(for: setDTO.setType)
         delegate?.childDidChange()
     }
     
@@ -71,7 +82,7 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
         }
     }
     
-    func addTimeToREst (_ seconds: Int) {
+    func addTimeToRest (_ seconds: Int) {
         guard hasRest, setDTO.restSession?.restState == .running else { return }
         
         setDTO.restSession!.duration += seconds
@@ -82,10 +93,14 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
         }
     }
     
-    func setRestDuration (_ seconds: Int) {
-        guard hasRest else { return }
+    func setRestDuration (_ seconds: Int?, source: UpdateSource = .view) {
+        guard hasRest, let seconds = seconds else { return }
         setDTO.restSession!.duration = max(0, seconds)
         delegate?.childDidChange()
+        
+        if source == .external {
+            restDidChangeExternal.send(seconds)
+        }
     }
     
     func startRest () {
@@ -142,6 +157,16 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     func applySetTypeDisplay (_ value: String) {
         guard setTypeDisplay != value else { return }
         setTypeDisplay = value
+    }
+    
+    func applyPrevPerformed (weight: Double?, reps: Int?) {
+        if prevPerformedWeight != weight {
+            prevPerformedWeight = weight
+        }
+        
+        if prevPerformedReps != reps {
+            prevPerformedReps = reps
+        }
     }
     
     func setWeightTarget (to target: Double?) {
@@ -236,5 +261,10 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
         }
         
         return .indigo
+    }
+    
+    var prevPerformedDisplay: String {
+        guard let prevPerformedReps = prevPerformedReps, let prevPerformedWeight = prevPerformedWeight else { return "-"}
+        return "\(prevPerformedWeight)\(parentEditStore.exerciseChildDTO.settings.metricType.rawValue) x \(prevPerformedReps)"
     }
 }

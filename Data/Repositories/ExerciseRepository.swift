@@ -8,20 +8,33 @@ final class ExerciseRepository {
     private let context: ModelContext
 
     private var modelById: [UUID: Exercise] = [:]
-    private var dtoById:   [UUID: DTO]      = [:]
+    private var dtoById: [UUID: DTO] = [:]
+    
     private var booted = false
 
-    private var diffContinuations: [UUID: AsyncStream<EntityDiff<UUID>>.Continuation] = [:]
+    private var diffSubscribers: [UUID: AsyncStream<EntityDiff<UUID>>.Continuation] = [:]
+    private var pendingDiffSubscribers: [UUID: AsyncStream<EntityDiff<UUID>>.Continuation] = [:]
 
     init(context: ModelContext) {
         self.context = context
     }
-    func boot() async throws {
+    
+    func boot () async throws {
         guard !booted else { return }
+        
         let all = try context.fetch(FetchDescriptor<Exercise>())
-        modelById = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
-        dtoById   = Dictionary(uniqueKeysWithValues: all.map { ($0.id, toDTO($0)) })
+        modelById = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0 )})
+        dtoById = Dictionary(uniqueKeysWithValues: all.map { ($0.id, toDTO($0)) })
+        
         booted = true
+        
+        if !pendingDiffSubscribers.isEmpty {
+            for (k, v) in pendingDiffSubscribers {
+                diffSubscribers[k] = v
+            }
+            
+            pendingDiffSubscribers.removeAll()
+        }
     }
 
     func snapshotDTOs() async -> [DTO] {
@@ -30,24 +43,28 @@ final class ExerciseRepository {
 
     func streamDiffs() -> AsyncStream<EntityDiff<UUID>> {
         AsyncStream(bufferingPolicy: .bufferingNewest(1)) { c in
-            let id = UUID()
+            let token = UUID()
             Task { @MainActor in
-                self.diffContinuations[id] = c
+                if booted {
+                    diffSubscribers[token] = c
+                }else {
+                    pendingDiffSubscribers[token] = c
+                }
             }
             c.onTermination = { _ in
                 Task { @MainActor in
-                    self.diffContinuations[id] = nil
+                    self.diffSubscribers[token] = nil
+                    self.pendingDiffSubscribers[token] = nil
                 }
             }
         }
     }
 
-    private func broadcast(diff: EntityDiff<UUID>) {
-        Task { @MainActor in
-            let targets = Array(self.diffContinuations.values)
-            Task.detached {
-                for cont in targets { cont.yield(diff) }
-            }
+    private func fanout (diff: EntityDiff<UUID>) {
+        guard booted else { return }
+        let targets = Array(diffSubscribers.values)
+        for cont in targets {
+            cont.yield(diff)
         }
     }
 
@@ -58,7 +75,11 @@ final class ExerciseRepository {
         var missing = Set<UUID>()
 
         for id in ids {
-            if let dto = dtoById[id] { result.append(dto) } else { missing.insert(id) }
+            if let dto = dtoById[id] {
+                result.append(dto)
+            } else {
+                missing.insert(id)
+            }
         }
 
         if !missing.isEmpty {
@@ -72,11 +93,13 @@ final class ExerciseRepository {
                 result.append(dto)
             }
         }
+        
         return result
     }
 
     func fetchDTOByName(_ name: String) async throws -> DTO? {
         if let hit = dtoById.values.first(where: { $0.name == name }) { return hit }
+        
         let pred = #Predicate<Exercise> { $0.name == name }
         if let m = try context.fetch(FetchDescriptor<Exercise>(predicate: pred)).first {
             modelById[m.id] = m
@@ -84,10 +107,11 @@ final class ExerciseRepository {
             dtoById[m.id] = dto
             return dto
         }
+        
         return nil
     }
 
-    func create(name: String, muscleGroupID: UUID, isPredefined: Bool = false) async throws -> DTO {
+    func create(name: String, muscleGroupID: UUID, isPredefined: Bool = false) async throws {
         if let _ = try await fetchDTOByName(name) {
             throw NSError(domain: "ExerciseRepository", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "Name already exists"])
@@ -102,8 +126,7 @@ final class ExerciseRepository {
         let dto = toDTO(ex)
         dtoById[ex.id] = dto
 
-        broadcast(diff: .init(inserted: [ex.id]))
-        return dto
+        fanout(diff: .init(inserted: [ex.id]))
     }
 
     func create(dto incoming: ExerciseDTO) async throws {
@@ -115,13 +138,12 @@ final class ExerciseRepository {
         let dto = toDTO(ex)
         modelById[ex.id] = ex
         dtoById[ex.id]   = dto
-
-        broadcast(diff: .init(inserted: [ex.id]))
+        
+        fanout(diff: .init(inserted: [ex.id]))
     }
 
     func rename(id: UUID, to newName: String) async throws {
-        guard let ex = modelById[id] else { return }
-        guard ex.name != newName else { return }
+        guard let ex = modelById[id], ex.name != newName else { return }
 
         if let existing = try await fetchDTOByName(newName), existing.id != id {
             throw NSError(domain: "ExerciseRepository", code: 2,
@@ -132,19 +154,18 @@ final class ExerciseRepository {
         try context.save()
 
         dtoById[id] = toDTO(ex)
-        broadcast(diff: .init(updated: [id]))
+        fanout(diff: .init(updated: [id]))
     }
 
     func changeMuscleGroup(id: UUID, to muscleGroupID: UUID) async throws {
-        guard let ex = modelById[id] else { return }
-        if ex.muscleGroup.id == muscleGroupID { return }
+        guard let ex = modelById[id], ex.muscleGroup.id != muscleGroupID else { return }
 
         let mg = try resolveMuscleGroup(id: muscleGroupID)
         ex.muscleGroup = mg
         try context.save()
 
         dtoById[id] = toDTO(ex)
-        broadcast(diff: .init(updated: [id]))
+        fanout(diff: .init(updated: [id]))
     }
 
     func delete(id: UUID) async throws {
@@ -153,19 +174,18 @@ final class ExerciseRepository {
         try context.save()
 
         modelById[id] = nil
-        dtoById[id]   = nil
+        dtoById[id] = nil
 
-        broadcast(diff: .init(deleted: [id]))
+        fanout(diff: .init(deleted: [id]))
     }
 
     private func toDTO(_ model: Exercise) -> DTO {
-        let dto = DTO(
+        DTO(
             id: model.id,
             version: dtoFingerprint(name: model.name, muscleGroupID: model.muscleGroup.id),
             name: model.name,
             muscleGroupID: model.muscleGroup.id
         )
-        return dto
     }
 
     private func dtoFingerprint(name: String, muscleGroupID: UUID) -> Int {

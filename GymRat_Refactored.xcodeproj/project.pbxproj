@@ -7,12 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		F619BF182EA16D25008FE95A /* Demo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F619BF172EA16D25008FE95A /* Demo.swift */; };
+		F6F436762EB4CE5800F5333A /* Demo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6F436752EB4CE5800F5333A /* Demo.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		F60CE8D22E87D0D600FF7C60 /* GymRat_Refactored.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GymRat_Refactored.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		F619BF172EA16D25008FE95A /* Demo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Demo.swift; sourceTree = "<group>"; };
+		F6F436752EB4CE5800F5333A /* Demo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Demo.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -42,7 +42,7 @@
 		F60CE8C92E87D0D500FF7C60 = {
 			isa = PBXGroup;
 			children = (
-				F619BF172EA16D25008FE95A /* Demo.swift */,
+				F6F436752EB4CE5800F5333A /* Demo.swift */,
 				F6D49F7B2EA0E32100502904 /* Data */,
 				F60CE8D42E87D0D600FF7C60 /* GymRat_Refactored */,
 				F60CE8D32E87D0D600FF7C60 /* Products */,
@@ -132,7 +132,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F619BF182EA16D25008FE95A /* Demo.swift in Sources */,
+				F6F436762EB4CE5800F5333A /* Demo.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

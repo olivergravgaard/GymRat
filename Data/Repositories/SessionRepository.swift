@@ -1,7 +1,8 @@
 import SwiftData
 import Foundation
 
-actor SessionRepository {
+@MainActor
+final class SessionRepository {
     private let context: ModelContext
     private var booted: Bool = false
     
@@ -9,15 +10,8 @@ actor SessionRepository {
         self.context = context
     }
     
-    func boot () async throws {
-        guard !booted else { return }
-        booted = true
-    }
-    
-    func persistAndFinishSession (from dto: WorkoutSessionDTO) async throws {
+    func persistAndFinishSession (from dto: WorkoutSessionDTO) throws {
         let endedAt: Date = .now
-        
-        try await boot()
         
         let muscleGroupsById = try resolveMuscleGroups(ids: dto.muscleGroupIDs)
         let exercisesById = try resolveExercises(ids: dto.exercises.map(\.exerciseId))
@@ -63,6 +57,22 @@ actor SessionRepository {
             context.insert(workoutSession)
             try context.save()
         }
+    }
+    
+    func lastPerformedExerciseSessionDTO (for exerciseId: UUID) -> ExerciseSessionDTO? {
+        let pred = #Predicate<ExerciseSession> { es in
+            es.exercise.id == exerciseId
+        }
+        
+        var desc = FetchDescriptor<ExerciseSession>(
+            predicate: pred,
+            sortBy: [SortDescriptor(\.workoutSession.startedAt, order: .reverse)]
+        )
+        
+        desc.fetchLimit = 1
+        
+        guard let model = try? context.fetch(desc).first else { return nil }
+        return model.toDTO()
     }
     
     private func resolveExercises(ids: [UUID]) throws -> [UUID: Exercise] {

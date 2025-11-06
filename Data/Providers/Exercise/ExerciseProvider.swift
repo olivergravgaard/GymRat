@@ -7,11 +7,14 @@ actor ExerciseProvider {
     private var byId: [UUID: ExerciseDTO] = [:]
     private var sortedList: [ExerciseDTO] = []
 
-    private var listSubs: [UUID: AsyncStream<[ExerciseDTO]>.Continuation] = [:]
-    private var mapSubs:  [UUID: AsyncStream<[UUID: ExerciseDTO]>.Continuation] = [:]
+    private var listSubscribers: [UUID: AsyncStream<[ExerciseDTO]>.Continuation] = [:]
+    private var mapSubscribers:  [UUID: AsyncStream<[UUID: ExerciseDTO]>.Continuation] = [:]
+    private var diffSubscribers: [UUID: AsyncStream<EntityDiff<UUID>>.Continuation] = [:]
 
     private var pumpTask: Task<Void, Never>?
     private var booted = false
+    
+    private var readyWaiters: [CheckedContinuation<Void, Never>] = []
 
     init(
         repo: ExerciseRepository
@@ -19,8 +22,30 @@ actor ExerciseProvider {
         self.repo = repo
     }
 
-    func start() {
-        startIfNeeded()
+    func boot() async {
+        guard pumpTask == nil else { return }
+        pumpTask = Task { [weak self] in
+            await self?.pump()
+        }
+        
+        await waitUntilReady()
+    }
+    
+    private func waitUntilReady () async {
+        if booted { return }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            readyWaiters.append(cont)
+        }
+    }
+    
+    private func signalReadyIfNeeded () {
+        guard booted else { return }
+        let waiters = readyWaiters
+        readyWaiters.removeAll()
+        
+        for waiter in waiters {
+            waiter.resume()
+        }
     }
     
     func stop()  {
@@ -44,10 +69,12 @@ actor ExerciseProvider {
                 guard let self else { return }
                 let id = UUID()
                 await self.registerListSubscriber(id: id, c)
-                await self.startIfNeeded()
+                await self.boot()
                 c.yield(await self.sortedList)
                 c.onTermination = { [weak self] _ in
-                    Task { await self?.unregisterListSubscriber(id: id) }
+                    Task {
+                        await self?.unregisterListSubscriber(id: id)
+                    }
                 }
             }
         }
@@ -59,7 +86,7 @@ actor ExerciseProvider {
                 guard let self else { return }
                 let id = UUID()
                 await self.registerMapSubscriber(id: id, c)
-                await self.startIfNeeded()
+                await self.boot()
                 c.yield(await self.byId)
                 c.onTermination = { [weak self] _ in
                     Task { await self?.unregisterMapSubscriber(id: id) }
@@ -68,7 +95,23 @@ actor ExerciseProvider {
         }
     }
     
-    func create(name: String, muscleGroupID: UUID) async throws -> ExerciseDTO {
+    func diffStream () -> AsyncStream<EntityDiff<UUID>> {
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { c in
+            Task { [weak self] in
+                guard let self else { return }
+                let id = UUID()
+                await self.registerDiffSubscriber(id: id, c)
+                await self.boot()
+                c.onTermination = { [weak self] _ in
+                    Task {
+                        await self?.unregisterDiffSubscriber(id: id)
+                    }
+                }
+            }
+        }
+    }
+    
+    func create(name: String, muscleGroupID: UUID) async throws {
         try await repo.create(name: name, muscleGroupID: muscleGroupID)
     }
 
@@ -83,23 +126,19 @@ actor ExerciseProvider {
     func delete (id: UUID) async throws {
         try await repo.delete(id: id)
     }
-
-
-    private func startIfNeeded() {
-        guard pumpTask == nil else { return }
-        pumpTask = Task { [weak self] in
-            await self?.pump()
-        }
+    
+    func dto (for id: UUID) -> ExerciseDTO? {
+        return byId[id]
     }
 
     private func pump() async {
-        if !booted {
-            try? await repo.boot()
-            let inital = await repo.snapshotDTOs()
-            byId = Dictionary(uniqueKeysWithValues: inital.map { ($0.id, $0) })
-            rebuildAndFanout()
-            booted = true
-        }
+        try? await repo.boot()
+        
+        let inital = await repo.snapshotDTOs()
+        byId = Dictionary(uniqueKeysWithValues: inital.map { ($0.id, $0) })
+        rebuildAndFanout()
+        booted = true
+        signalReadyIfNeeded()
         
         for await d in await repo.streamDiffs() {
             if Task.isCancelled { break }
@@ -116,57 +155,69 @@ actor ExerciseProvider {
             }
             
             rebuildAndFanout()
+            
+            for c in diffSubscribers.values {
+                c.yield(d)
+            }
         }
     }
 
     private func rebuildAndFanout() {
         let newList = byId.values.sorted {
             let c = $0.name.localizedCaseInsensitiveCompare($1.name)
-            
-            if c == .orderedSame {
-                return $0.id.uuidString < $1.id.uuidString
-            }
-            
-            return c == .orderedAscending
+            return c == .orderedSame ? $0.id.uuidString < $1.id.uuidString : c == .orderedAscending
         }
         
         sortedList = newList
         
-        for c in listSubs.values {
+        for c in listSubscribers.values {
             c.yield(sortedList)
         }
         
-        for c in mapSubs.values {
+        for c in mapSubscribers.values {
             c.yield(byId)
         }
     }
 
     private func finishAll() {
-        for c in listSubs.values {
+        for c in listSubscribers.values {
             c.finish()
         }
         
-        for c in mapSubs.values  {
+        for c in mapSubscribers.values {
             c.finish()
         }
         
-        listSubs.removeAll()
-        mapSubs.removeAll()
+        for c in diffSubscribers.values {
+            c.finish()
+        }
+        
+        listSubscribers.removeAll()
+        mapSubscribers.removeAll()
+        diffSubscribers.removeAll()
     }
 
     private func registerListSubscriber(id: UUID, _ c: AsyncStream<[ExerciseDTO]>.Continuation) {
-        listSubs[id] = c
+        listSubscribers[id] = c
     }
 
     private func unregisterListSubscriber(id: UUID) {
-        listSubs[id] = nil
+        listSubscribers[id] = nil
     }
 
     private func registerMapSubscriber(id: UUID, _ c: AsyncStream<[UUID: ExerciseDTO]>.Continuation) {
-        mapSubs[id] = c
+        mapSubscribers[id] = c
     }
 
     private func unregisterMapSubscriber(id: UUID) {
-        mapSubs[id] = nil
+        mapSubscribers[id] = nil
+    }
+    
+    private func registerDiffSubscriber (id: UUID, _ c: AsyncStream<EntityDiff<UUID>>.Continuation) {
+        diffSubscribers[id] = c
+    }
+    
+    private func unregisterDiffSubscriber (id: UUID) {
+        diffSubscribers[id] = nil
     }
 }

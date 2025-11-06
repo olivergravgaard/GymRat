@@ -19,6 +19,7 @@ public final class NumpadHost: ObservableObject, NumpadHosting {
     private struct WeakEndpoint { weak var ref: (any FieldEndpoint)? }
     private var registry: [FieldID: WeakEndpoint] = [:]
     @Published public private(set) var activeId: FieldID?
+    @Published private(set) var cachedActiveId: FieldID?
     private var pendingFocusId: FieldID?
     private var actionsMap: [UUID: FieldsActions] = [:]
     public var supportsNavigation: Bool { true }
@@ -90,7 +91,7 @@ public final class NumpadHost: ObservableObject, NumpadHosting {
     public func setOrder(
         _ ids: [FieldID],
         preserveActive: Bool = true,
-        autoInsertActiveIfMissing: Bool = true,
+        autoInsertActiveIfMissing: Bool = false,
         seedValuesForNew: Bool = true
     ) {
         if seedValuesForNew {
@@ -103,7 +104,7 @@ public final class NumpadHost: ObservableObject, NumpadHosting {
         indexOf = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($1, $0) })
 
         if let a = activeId, indexOf[a] == nil {
-            if autoInsertActiveIfMissing {
+            /*if autoInsertActiveIfMissing {
                 order.append(a)
                 indexOf[a] = order.count - 1
             } else if preserveActive {
@@ -112,7 +113,8 @@ public final class NumpadHost: ObservableObject, NumpadHosting {
                 if let t = newTarget { setActive(t) }
             } else {
                 setActive(nil)
-            }
+            }*/
+            setActive(nil)
         }
     }
 
@@ -144,7 +146,7 @@ public final class NumpadHost: ObservableObject, NumpadHosting {
         if pendingFocusId == id || activeId == id {
             pendingFocusId = nil
             endpoint.becomeActive()
-            actionsMap[id]?.onBecomeActive?()
+            _ = actionsMap[id]?.onBecomeActive?()
         }
     }
 
@@ -158,11 +160,13 @@ public final class NumpadHost: ObservableObject, NumpadHosting {
     }
 
     public func setActive(_ id: FieldID?) {
-        guard activeId != id else { return }
+        guard activeId != id else {
+            return
+        }
 
         if let prev = activeId, let ep = registry[prev]?.ref {
             ep.resignActive()
-            actionsMap[prev]?.onResignActive?()
+            _ = actionsMap[prev]?.onResignActive?()
         }
 
         if let id, indexOf[id] == nil {
@@ -174,12 +178,24 @@ public final class NumpadHost: ObservableObject, NumpadHosting {
 
         if let ep = registry[id]?.ref {
             ep.becomeActive()
-            actionsMap[id]?.onBecomeActive?()
+            _ = actionsMap[id]?.onBecomeActive?()
             onScrollTo?(id)
         } else {
             pendingFocusId = id
             onScrollTo?(id)
         }
+    }
+    
+    public func saveCachedActiveId () {
+        guard let activeId = activeId else { return }
+        cachedActiveId = activeId
+        setActive(nil)
+    }
+    
+    public func setCachedActiveId () {
+        guard let cachedActiveId = cachedActiveId else { return }
+        setActive(cachedActiveId)
+        self.cachedActiveId = nil
     }
 
     public func focusNext() {

@@ -28,6 +28,7 @@ final class AppComposition: ObservableObject {
     // Lookup Sources
     let muscleGroupLookupSource: MuscleGroupLookupSource
     let exerciseLookupSource: ExerciseLookupSource
+    let exerciseMuscleGroupNameLookupSource: ExerciseMuscleGroupNameLookupSource
     
     @Published private(set) var bootState: BootState = .idle
     
@@ -72,6 +73,10 @@ final class AppComposition: ObservableObject {
         // LookupSources
         self.muscleGroupLookupSource = MuscleGroupLookupSource(provider: muscleGroupProvider)
         self.exerciseLookupSource = ExerciseLookupSource(provider: exerciseProvider)
+        self.exerciseMuscleGroupNameLookupSource = ExerciseMuscleGroupNameLookupSource(
+            exerciseLookup: exerciseLookupSource,
+            muscleGroupLookup: muscleGroupLookupSource
+        )
     }
     
     func boot () async {
@@ -86,7 +91,8 @@ final class AppComposition: ObservableObject {
             // Exercise
             try await exerciseRepository.boot()
             try await seedDefaultExercisesIfNeeded()
-            await exerciseProvider.start()
+            await exerciseProvider.boot()
+            exerciseLookupSource.boot()
             
             // WorkoutTemplate
             try await templateRepository.boot()
@@ -94,7 +100,6 @@ final class AppComposition: ObservableObject {
             await templateProvider.start()
             
             // Session
-            try await sessionRepository.boot()
             _ = await self.sessionDraftStore.load()
             
             bootState = .ready

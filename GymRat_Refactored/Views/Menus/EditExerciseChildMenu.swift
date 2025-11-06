@@ -12,7 +12,7 @@ struct EditExerciseChildMenu: View {
     let settings: ExerciseSettings
     let standaloneNumpadHost: FocusOnlyHost
     let pageAnimation: Animation
-    let onAddWarmupSets: (Int?) -> Void
+    let onAddSets: (_ setType: SetType, _ count: Int) -> Void
     let onUpdateRestTimers: (_ warmup: Int?, _ working: Int?) -> Void
     let onAddRestTimers: () -> Void
     let onReplaceExercise: () -> Void
@@ -23,8 +23,9 @@ struct EditExerciseChildMenu: View {
     @State private var state: SectionState = .initial
     @State private var goingBack: Bool = false
     
-    @State private var addWarmupSetsFieldId: UUID = UUID()
-    @State private var addWarmupSetsText: String = "0"
+    @State private var addSetsFieldId: UUID = UUID()
+    @State private var addSetsCountText: String = "0"
+    @State private var addSetsSetType: SetType = .regular
     
     @State private var warmupRestTimerFieldId: UUID = UUID()
     @State private var warmupRestTimerText: String = ""
@@ -42,7 +43,7 @@ struct EditExerciseChildMenu: View {
         settings: ExerciseSettings,
         standaloneNumpadHost: FocusOnlyHost,
         pageAnimation: Animation,
-        onAddWarmupSets: @escaping (Int?) -> Void,
+        onAddSets: @escaping (_ setType: SetType, _ count: Int) -> Void,
         onUpdateRestTimers: @escaping (_ warmup: Int?, _ working: Int?) -> Void,
         onAddRestTimers: @escaping () -> Void,
         onReplaceExercise: @escaping () -> Void,
@@ -52,7 +53,7 @@ struct EditExerciseChildMenu: View {
         self.settings = settings
         self.standaloneNumpadHost = standaloneNumpadHost
         self.pageAnimation = pageAnimation
-        self.onAddWarmupSets = onAddWarmupSets
+        self.onAddSets = onAddSets
         self.onUpdateRestTimers = onUpdateRestTimers
         self.onAddRestTimers = onAddRestTimers
         self.onReplaceExercise = onReplaceExercise
@@ -70,7 +71,7 @@ struct EditExerciseChildMenu: View {
                 case .initial:
                     initialView()
                 case .addWarmupSets:
-                    addWarmupSetsView()
+                    addSetsView()
                 case .updateRestTimers:
                     updateRestTimersView()
                 }
@@ -94,7 +95,7 @@ struct EditExerciseChildMenu: View {
                 }
             }
             
-            labelView(title: "Add warmup sets", image: "plusminus") {
+            labelView(title: "Add sets", image: "plus") {
                 navigate(to: .addWarmupSets, goingBack: false)
             }
             
@@ -217,8 +218,14 @@ struct EditExerciseChildMenu: View {
     }
 
     @ViewBuilder
-    func addWarmupSetsView () -> some View {
-        VStack {
+    func addSetsView () -> some View {
+        
+        var selectSetTypeLabelWidth: CGFloat? = nil
+        var isValid: Bool {
+            !addSetsCountText.isEmpty && !(Int(addSetsCountText) == 0)
+        }
+        
+        VStack (spacing: 16) {
             HStack {
                 DismissButton {
                     navigate(to: .initial, goingBack: true)
@@ -231,36 +238,110 @@ struct EditExerciseChildMenu: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             
-            FieldRow(
-                id: addWarmupSetsFieldId,
-                host: standaloneNumpadHost,
-                inputPolicy: InputPolicies.digitsOnly(maxDigits: 1, allowNegative: false),
-                config: .init(),
-                text: $addWarmupSetsText
-            )
-            .frame(maxWidth: .infinity, alignment: .center)
-            .frame(height: 44, alignment: .center)
-            .onAppear {
-                standaloneNumpadHost.setActive(addWarmupSetsFieldId)
+            VStack (alignment: .leading, spacing: 4) {
+                Text("Count")
+                    .foregroundStyle(.gray)
+                    .font(.caption)
+                    .fontWeight(.bold)
+                FieldRow(
+                    id: addSetsFieldId,
+                    host: standaloneNumpadHost,
+                    inputPolicy: InputPolicies.digitsOnly(maxDigits: 1, allowNegative: false),
+                    config: .init(),
+                    text: $addSetsCountText
+                )
+                .frame(maxWidth: .infinity, alignment: .center)
+                .frame(height: 44, alignment: .center)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12).strokeBorder(.indigo.opacity(isValid ? 1 : 0.3), style: .init(lineWidth: 1)).fill(.clear)
+                }
+                .onAppear {
+                    standaloneNumpadHost.setActive(addSetsFieldId)
+                }
+            }
+            
+            VStack (alignment: .leading, spacing: 4) {
+                Text("Settype")
+                    .foregroundStyle(.gray)
+                    .font(.caption)
+                    .fontWeight(.bold)
+                
+                    MorphMenuView(
+                        numpadHost: standaloneNumpadHost,
+                        config: .init(
+                            alignment: .top,
+                            cornerRadius: 12,
+                            extraBounce: 0,
+                            animation: .snappy(duration: 0.3),
+                            backgroundTapable: false
+                        )) {
+                            Text(addSetsSetType.rawValue)
+                                .foregroundStyle(addSetsSetType.color)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 32, alignment: .center)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(addSetsSetType.color.opacity(0.3))
+                                }
+                                .onGeometryChange(for: CGSize.self) {
+                                    $0.size
+                                } action: { newValue in
+                                    guard selectSetTypeLabelWidth == nil else { return }
+                                    selectSetTypeLabelWidth = newValue.width
+                                }
+                            
+                        } menu: { close in
+                            VStack (spacing: 8) {
+                                ForEach(SetType.allCases, id: \.id) { setType in
+                                    Button {
+                                        guard addSetsSetType != setType else {
+                                            close { }
+                                            return
+                                        }
+                                        close {
+                                            withAnimation(.smooth(duration: 0.1)) {
+                                                addSetsSetType = setType
+                                            }
+                                        }
+                                    } label: {
+                                        Text(setType.rawValue)
+                                            .foregroundStyle(setType.color)
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .frame(width: selectSetTypeLabelWidth ?? 144, height: 32, alignment: .center)
+                                            .background {
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .fill(setType.fadedColor)
+                                            }
+                                    }
+                                    
+                                }
+                            }
+                            .padding()
+                        }
             }
             
             Button {
                 close {
-                    onAddWarmupSets(parse(addWarmupSetsText))
+                    guard let count = parse(addSetsCountText) else { return }
+                    onAddSets(addSetsSetType, count)
                 }
             } label: {
                 Text("Add")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(isValid ? .white : .black)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .frame(height: 44, alignment: .center)
+                    .frame(height: 32, alignment: .center)
                     .background {
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(.indigo)
+                            .fill(isValid ? .indigo : Color(red: 0.937, green: 0.937, blue: 0.937))
                     }
             }
-
+            .disabled(!isValid)
+            .opacity(isValid ? 1 : 0.7)
         }
     }
 }

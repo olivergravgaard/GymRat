@@ -22,7 +22,3 @@ struct MuscleGroupDTO: Identifiable & Hashable & Sendable {
         return h.finalize()
     }
 }
-
-struct MuscleGroupInfo: Sendable {
-    let name: String
-}

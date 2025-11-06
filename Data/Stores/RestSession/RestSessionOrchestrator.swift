@@ -45,7 +45,6 @@ public actor RestSessionOrchestrator {
     public func subscribe(setId: UUID) -> AsyncStream<RestTick> {
         AsyncStream { continuation in
             let token = UUID()
-            print(token)
             if continuations[setId] == nil { continuations[setId] = [:] }
             continuations[setId]?[token] = continuation
 

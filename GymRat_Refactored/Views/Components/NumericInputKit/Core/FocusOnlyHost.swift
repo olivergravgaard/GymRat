@@ -88,7 +88,7 @@ public final class FocusOnlyHost: ObservableObject, NumpadHosting {
         
         if activeId == id {
             endpoint.becomeActive()
-            actionsMap[id]?.onBecomeActive?()
+            _ = actionsMap[id]?.onBecomeActive?()
         }
     }
 
@@ -115,7 +115,7 @@ public final class FocusOnlyHost: ObservableObject, NumpadHosting {
         
         if let prev = activeId, let ep = registry[prev]?.ref {
             ep.resignActive()
-            actionsMap[prev]?.onResignActive?()
+            _ = actionsMap[prev]?.onResignActive?()
         }
 
         activeId = id
@@ -123,7 +123,7 @@ public final class FocusOnlyHost: ObservableObject, NumpadHosting {
         guard let id else { return }
         if let ep = registry[id]?.ref {
             ep.becomeActive()
-            actionsMap[id]?.onBecomeActive?()
+            _ = actionsMap[id]?.onBecomeActive?()
             onScrollTo?(id)
         } else {
             onScrollTo?(id) // feltet mount'er måske senere
@@ -165,4 +165,64 @@ public final class FocusOnlyHost: ObservableObject, NumpadHosting {
             onValueChanged?(id, nv)
         }
     }
+}
+
+@MainActor
+public final class NopNumpadHost: ObservableObject, NumpadHosting {
+    
+    static let shared = NopNumpadHost()
+    
+    private init(
+        activeId: FieldID? = nil,
+        onScrollTo: ((FieldID) -> Void)? = nil,
+        onValueChanged: ((FieldID,NumericValue) -> Void)? = nil,
+        supportsNavigation: Bool = false
+    ) {
+        self.activeId = activeId
+        self.onScrollTo = onScrollTo
+        self.onValueChanged = onValueChanged
+        self.supportsNavigation = supportsNavigation
+    }
+    
+    public var activeId: FieldID?
+    
+    public func setActive(_ id: FieldID?) {
+        
+    }
+    
+    public func register(endpoint: any FieldEndpoint, for id: FieldID) {
+            
+    }
+    
+    public func unregister(id: FieldID) {
+            
+    }
+    
+    public func setValue(_ value: NumericValue, for id: FieldID) {
+            
+    }
+    
+    public func value(for id: FieldID) -> NumericValue? {
+        return nil
+    }
+    
+    public var onScrollTo: ((FieldID) -> Void)?
+    
+    public var onValueChanged: ((FieldID, NumericValue) -> Void)?
+    
+    public func setActions(_ actions: FieldsActions, for id: UUID) {
+        
+    }
+    
+    public var supportsNavigation: Bool
+    
+    public func currentKeyboardTree() -> KeyboardNode {
+        return KeyboardNode.empty
+    }
+    
+    public func handleKey(_ key: NumpadKey) {
+        
+    }
+    
+    
 }

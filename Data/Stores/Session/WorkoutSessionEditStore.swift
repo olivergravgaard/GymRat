@@ -78,13 +78,22 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
     }
     
     func boot (dto: WorkoutSessionDTO) {
-        self.id = dto.id
-        self.sessionDTO = dto
-        self.exerciseSessions = dto.exercises
-            .sorted(by: { $0.order < $1.order })
-            .map{ ExerciseSessionEditStore(dto: $0, delegate: self, parentEditStore: self )}
-        
-        restoreRunningRestIfAny()
+        Task {
+            self.id = dto.id
+            self.sessionDTO = dto
+            self.exerciseSessions = dto.exercises
+                .sorted(by: { $0.order < $1.order })
+                .map{
+                    ExerciseSessionEditStore(
+                        dto: $0,
+                        lastPerfomedDTO: repo.lastPerformedExerciseSessionDTO(for: $0.exerciseId),
+                        delegate: self,
+                        parentEditStore: self
+                    )
+                }
+            
+            restoreRunningRestIfAny()
+        }
     }
     
     func childDidChange() {
@@ -101,7 +110,12 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
             sets: []
         )
         
-        let store = ExerciseSessionEditStore(dto: dto, delegate: self, parentEditStore: self)
+        let store = ExerciseSessionEditStore(
+            dto: dto,
+            lastPerfomedDTO: repo.lastPerformedExerciseSessionDTO(for: exerciseId),
+            delegate: self,
+            parentEditStore: self
+        )
         exerciseSessions.append(store)
         markDirty()
     }
@@ -118,7 +132,14 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
                 sets: []
             )
             
-            exerciseSessions.append(ExerciseSessionEditStore(dto: dto, delegate: self, parentEditStore: self))
+            exerciseSessions.append(
+                ExerciseSessionEditStore(
+                    dto: dto,
+                    lastPerfomedDTO: repo.lastPerformedExerciseSessionDTO(for: exerciseId),
+                    delegate: self,
+                    parentEditStore: self
+                )
+            )
             nextOrder += 1
         }
         
@@ -163,7 +184,7 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
             try await flushPersistNow()
             guard let out = snapshot() else { return false }
             
-            try await repo.persistAndFinishSession(from: out)
+            try repo.persistAndFinishSession(from: out)
             await draftStore.clear()
             
             self.id = nil
@@ -178,16 +199,14 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
     }
     
     // Should not trigger childDidChange
-    func markAllSetsAsPerformed () async -> Bool {
+    func markAllSetsAsPerformed () async {
         for exerciseSession in exerciseSessions {
             exerciseSession.markAllSetsAsPerformed()
         }
-        
-        return true
     }
     
     // Should not trigger childDidChange
-    func discardAllUnperformedSets () async -> Bool {
+    func discardAllUnperformedSets () async {
         for exerciseSession in exerciseSessions {
             if exerciseSession.hasNoPerformedSets {
                 removeExercise(exerciseSession.id)
@@ -195,8 +214,6 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
                 exerciseSession.discardAllUnperformedSets()
             }
         }
-        
-        return true
     }
     
     func cancel () async -> Bool {
@@ -284,7 +301,7 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
     
     private func normalizeOrder () {
         for (i, e) in exerciseSessions.enumerated() {
-            e.setOrder(i)
+            e.setOrder(i + 1)
         }
     }
     

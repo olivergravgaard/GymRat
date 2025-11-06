@@ -13,6 +13,8 @@ struct ExerciseTemplateView: View {
     let standaloneNumpadHost: FocusOnlyHost
     let proxy: ScrollViewProxy
     
+    @State private var cachedActiveField: UUID? = nil
+    
     var body: some View {
         VStack (spacing: 16) {
             HStack (alignment: .firstTextBaseline) {
@@ -21,6 +23,7 @@ struct ExerciseTemplateView: View {
                         Text(appComp.exerciseLookupSource.name(for: editStore.exerciseChildDTO.exerciseId))
                             .font(.title3)
                             .fontWeight(.bold)
+                            .lineLimit(1)
                         
                     }
                     
@@ -54,9 +57,9 @@ struct ExerciseTemplateView: View {
                         EditExerciseChildMenu(
                             settings: editStore.exerciseChildDTO.settings,
                             standaloneNumpadHost: standaloneNumpadHost,
-                            pageAnimation: .smooth(duration: 0.3)) { count in
+                            pageAnimation: .smooth(duration: 0.3)) { (setType, count) in
                                 withAnimation(.snappy(duration: 0.3)) {
-                                    editStore.addWarmupSets(count)
+                                    editStore.addSets(setType: setType, count: count)
                                 }
                             } onUpdateRestTimers: { warmup, working in
                                 editStore.updateRestTimers(warmup: warmup, working: working)
@@ -68,12 +71,18 @@ struct ExerciseTemplateView: View {
                             onReplaceExercise: {
                                 replaceExercisePayload = .init(exerciseId: editStore.exerciseChildDTO.id)
                             } onDeleteSelf: {
-                                editStore.deleteSelf()
+                                withAnimation(.snappy(duration: 0.3)) {
+                                    editStore.deleteSelf()
+                                }
                             } close: { onClosed in
                                 close {
                                     onClosed()
+                                    
+                                    numpadHost.setCachedActiveId()
                                 }
                             }
+                    } onOpen: {
+                        numpadHost.saveCachedActiveId()
                     }
             }
             
@@ -123,11 +132,7 @@ struct ExerciseTemplateView: View {
         }
         .padding()
         .frame(maxWidth: .infinity)
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(red: 0.937, green: 0.937, blue: 0.937))
-        }
-        .compositingGroup()
-        .shadow(color: .black.opacity(0.1), radius: 4, y: 4)
+        .transition(.blurReplace)
     }
+
 }

@@ -11,6 +11,7 @@ struct ExerciseSessionView: View {
     
     let numpadHost: NumpadHost
     let standaloneNumpadHost: FocusOnlyHost
+    let proxy: ScrollViewProxy
     
     var body: some View {
         VStack (spacing: 16) {
@@ -38,7 +39,7 @@ struct ExerciseSessionView: View {
                         cornerRadius: 12,
                         extraBounce: 8,
                         animation: .smooth(duration: 0.3)
-                    )) {
+                    ), proxy: proxy) {
                         Image(systemName: "ellipsis")
                             .foregroundStyle(.white)
                             .font(.footnote)
@@ -51,22 +52,32 @@ struct ExerciseSessionView: View {
                         EditExerciseChildMenu(
                             settings: editStore.exerciseChildDTO.settings,
                             standaloneNumpadHost: standaloneNumpadHost,
-                            pageAnimation: .smooth(duration: 0.3)) { count in
-                                editStore.addWarmupSets(count)
+                            pageAnimation: .smooth(duration: 0.3)) { (setType, count) in
+                                editStore.addSets(setType: setType, count: count)
                             } onUpdateRestTimers: { warmup, working in
-                                
+                                editStore.updateRestTimers(warmup: warmup, working: working)
                             } onAddRestTimers: {
+                                withAnimation(.snappy(duration: 0.3)) {
+                                    editStore.addMissingRestSessions()
+                                }
                                 
                             }
                             onReplaceExercise: {
                                 replaceExercisePayload = .init(exerciseId: editStore.exerciseChildDTO.id)
                             } onDeleteSelf: {
+                                withAnimation(.snappy(duration: 0.3)) {
+                                    editStore.deleteSelf()
+                                }
                                 editStore.deleteSelf()
                             } close: { onClosed in
                                 close {
                                     onClosed()
+                                    
+                                    numpadHost.setCachedActiveId()
                                 }
                             }
+                    } onOpen: {
+                        numpadHost.saveCachedActiveId()
                     }
             }
             
@@ -126,11 +137,6 @@ struct ExerciseSessionView: View {
         }
         .padding()
         .frame(maxWidth: .infinity)
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(red: 0.937, green: 0.937, blue: 0.937))
-        }
-        .compositingGroup()
-        .shadow(color: .black.opacity(0.1), radius: 4, y: 4)
+        .transition(.blurReplace)
     }
 }

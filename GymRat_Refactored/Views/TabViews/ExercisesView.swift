@@ -83,22 +83,25 @@ fileprivate struct TopBar: View {
     @ObservedObject var filterStore: ExerciseFilterStore
     
     var body: some View {
-        VStack (alignment: .leading, spacing: 8) {
+        VStack (alignment: .leading, spacing: 12) {
             Text("Exercises")
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
             SearchField(placeholder: "Search for exercise", input: $filterStore.searchText)
                 .frame(maxWidth: .infinity)
-                .frame(height: 55)
         }
         .padding(.horizontal)
-        .padding(.bottom)
         .padding(.top, 55)
         .frame(maxWidth: .infinity)
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadii: .init(bottomLeading: 12, bottomTrailing: 12)))
+        .frame(height: 165)
+        .background {
+            UnevenRoundedRectangle(cornerRadii: .init(bottomLeading: 16, bottomTrailing: 16))
+                .fill(Color(red: 0.95, green: 0.95, blue: 0.97).opacity(0.1))
+                .glassEffect(.regular.interactive(false), in: .rect(cornerRadii: .init(bottomLeading: 16, bottomTrailing: 16)))
+        }
         .compositingGroup()
-        .shadow(color: .black.opacity(0.1), radius: 4, y: 4)
+        .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
     }
 }
 
@@ -137,7 +140,7 @@ fileprivate struct ExerciseRowView: View, Equatable {
     
     var body: some View {
         HStack {
-            Text(appComp.exerciseLookupSource.name(for: exercise.id))
+            Text(exercise.name)
                 .font(.subheadline)
                 .fontWeight(.medium)
             Spacer(minLength: 8)

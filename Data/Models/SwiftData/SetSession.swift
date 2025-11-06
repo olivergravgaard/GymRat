@@ -41,4 +41,19 @@ final class SetSession: Equatable, Identifiable {
         self.performed = false
         self.restSessionData = nil
     }
+    
+    func toDTO () -> SetSessionDTO {
+        .init(
+            id: self.id,
+            order: self.order,
+            weightTarget: self.weightTarget,
+            minReps: self.minReps,
+            maxReps: self.maxReps,
+            weight: self.weight,
+            reps: self.reps,
+            setType: self.setType,
+            performed: self.performed,
+            restSession: self.restSession
+        )
+    }
 }

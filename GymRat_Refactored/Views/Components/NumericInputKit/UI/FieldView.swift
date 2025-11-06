@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import MetalKit
 
 public enum FieldTextAlignment: Equatable {
     case leading, center, trailing
@@ -200,6 +201,9 @@ public final class FieldView: UIView, FieldEndpoint {
     private var leftHandle: CALayer = CALayer()
     private var rightHandle: CALayer = CALayer()
     
+    private var lastNonEmptySelectionDuringGesture: Range<Int>?
+    private var isSelectionGestureActive: Bool = false
+    
     private let placeholderLayer = CATextLayer()
 
     public init (inputPolicy: InputPolicy, config: FieldConfig) {
@@ -219,6 +223,7 @@ public final class FieldView: UIView, FieldEndpoint {
     }
     
     private func commonInit() {
+
         selectionLayer.backgroundColor = config.selectionColor.cgColor
         selectionLayer.isHidden = true
         layer.addSublayer(selectionLayer)
@@ -227,13 +232,13 @@ public final class FieldView: UIView, FieldEndpoint {
         caretLayer.isHidden = true
         layer.addSublayer(caretLayer)
         
-        placeholderLayer.contentsScale = UIScreen.main.scale
+        placeholderLayer.contentsScale = UIScreen.current?.scale ?? 1
         placeholderLayer.alignmentMode = .left
         placeholderLayer.truncationMode = .none
         placeholderLayer.isWrapped = false
         layer.addSublayer(placeholderLayer)
 
-        textLayer.contentsScale = UIScreen.main.scale
+        textLayer.contentsScale = UIScreen.current?.scale ?? 1
         textLayer.alignmentMode = .left
         textLayer.truncationMode = .none
         textLayer.isWrapped = false
@@ -267,6 +272,7 @@ public final class FieldView: UIView, FieldEndpoint {
         disableImplicitAnimations(for: layer)
 
         disableImplicitAnimations(for: caretLayer, keepOpacity: true)
+        
     }
     
     private func contentOffsetX() -> CGFloat {
@@ -506,13 +512,19 @@ public final class FieldView: UIView, FieldEndpoint {
             return
         }
 
-        guard let sel = value.selection, sel.count > 0 else {
+        let selToUse: Range<Int>? = {
+            if let sel = value.selection, sel.count > 0 { return sel }
+            if isSelectionGestureActive { return lastNonEmptySelectionDuringGesture }
+            return nil
+        }()
+
+        guard let sel = selToUse, sel.count > 0 else {
             selectionLayer.isHidden = true
             leftHandle.isHidden = true
             rightHandle.isHidden = true
             return
         }
-        
+
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         selectionLayer.isHidden = false
@@ -523,7 +535,6 @@ public final class FieldView: UIView, FieldEndpoint {
                                       y: y,
                                       width: max(1, abs(x2 - x1)),
                                       height: metrics.lineHeight)
-
         updateHandles()
         CATransaction.commit()
     }
@@ -574,6 +585,20 @@ public final class FieldView: UIView, FieldEndpoint {
         if !isActive {
             isActive = true
             host?.setActive(id)
+            
+            let n = value.text.utf16Count
+            
+            if n > 0 {
+                var t = value
+                t.selection = 0..<n
+                t.caret = n
+                setValue(t, animated: false)
+                layoutSelection()
+                layoutCaret()
+                updateHandles()
+                updateGestureEnabling()
+                return
+            }
         }
         
         let idx = lineLayout.index(forX: localX(for: g.location(in: self)))
@@ -607,57 +632,78 @@ public final class FieldView: UIView, FieldEndpoint {
         host?.handleKey(key)
     }
     
-    // NEW
     @objc private func handlePan(_ g: UIPanGestureRecognizer) {
         let p = g.location(in: self)
+
         switch g.state {
-            case .began:
-                guard let sel = value.selection else { return }
+        case .began:
+            guard let sel = value.selection else { return }
 
-                let slop: CGFloat = 16
-                let leftHit  = leftHandle.frame.insetBy(dx: -slop, dy: -slop).contains(p)
-                let rightHit = rightHandle.frame.insetBy(dx: -slop, dy: -slop).contains(p)
+            let slop: CGFloat = 16
+            let leftHit  = leftHandle.frame.insetBy(dx: -slop, dy: -slop).contains(p)
+            let rightHit = rightHandle.frame.insetBy(dx: -slop, dy: -slop).contains(p)
 
-                if leftHit {
-                    dragMode = .adjustStart
-                    fixedAnchor = sel.upperBound
-                } else if rightHit {
-                    dragMode = .adjustEnd
-                    fixedAnchor = sel.lowerBound
-                } else {
-                    dragMode = .none
-                }
-
-            case .changed:
-                guard dragMode != .none, let anchor = fixedAnchor else { return }
-                let cur = lineLayout.index(forX: localX(for: p))
-                var t = value
-                switch dragMode {
-                case .adjustStart:
-                    let lo = min(cur, anchor), hi = max(cur, anchor)
-                    t.selection = lo < hi ? lo..<hi : nil
-                    t.caret = lo
-                case .adjustEnd:
-                    let lo = min(anchor, cur), hi = max(anchor, cur)
-                    t.selection = lo < hi ? lo..<hi : nil
-                    t.caret = hi
-                case .none: break
-                }
-                setValue(t, animated: false)
-
-            case .ended, .cancelled, .failed:
+            if leftHit {
+                dragMode = .adjustStart
+                fixedAnchor = sel.upperBound
+            } else if rightHit {
+                dragMode = .adjustEnd
+                fixedAnchor = sel.lowerBound
+            } else {
                 dragMode = .none
-                fixedAnchor = nil
-                
-                if value.selection?.isEmpty == true {
-                    var t = value
-                    t.selection = nil
-                    setValue(t, animated: false)
-                }
-                
-                updateGestureEnabling()
+            }
 
-            default: break
+            if dragMode != .none {
+                isSelectionGestureActive = true
+                lastNonEmptySelectionDuringGesture = sel.isEmpty ? nil : sel
+            }
+
+        case .changed:
+            guard dragMode != .none, let anchor = fixedAnchor else { return }
+            let cur = lineLayout.index(forX: localX(for: p))
+
+            var t = value
+            switch dragMode {
+            case .adjustStart:
+                let lo = min(cur, anchor), hi = max(cur, anchor)
+                if lo != hi {
+                    t.selection = lo..<hi
+                    t.caret = lo
+                    lastNonEmptySelectionDuringGesture = lo..<hi
+                } else {
+                    t.selection = lastNonEmptySelectionDuringGesture
+                    t.caret = cur
+                }
+            case .adjustEnd:
+                let lo = min(anchor, cur), hi = max(anchor, cur)
+                if lo != hi {
+                    t.selection = lo..<hi
+                    t.caret = hi
+                    lastNonEmptySelectionDuringGesture = lo..<hi
+                } else {
+                    t.selection = lastNonEmptySelectionDuringGesture
+                    t.caret = cur
+                }
+            case .none: break
+            }
+
+            setValue(t, animated: false)
+
+        case .ended, .cancelled, .failed:
+            dragMode = .none
+            fixedAnchor = nil
+
+            // Først nu må selection blive tom
+            if value.selection?.isEmpty == true {
+                var t = value
+                t.selection = nil
+                setValue(t, animated: false)
+            }
+            lastNonEmptySelectionDuringGesture = nil
+            isSelectionGestureActive = false
+
+            updateGestureEnabling()
+        default: break
         }
     }
     
@@ -671,38 +717,54 @@ public final class FieldView: UIView, FieldEndpoint {
         let p = g.location(in: self)
 
         switch g.state {
-            case .began:
-                if host?.activeId != id { isActive = true; host?.setActive(id) }
+        case .began:
+            if host?.activeId != id { isActive = true; host?.setActive(id) }
 
-                let i = lineLayout.index(forX: localX(for: p))
-                selectionAnchorUTF16 = i
+            let i = lineLayout.index(forX: localX(for: p))
+            selectionAnchorUTF16 = i
 
+            isSelectionGestureActive = true
+            lastNonEmptySelectionDuringGesture = value.selection?.isEmpty == false ? value.selection : nil
+
+            var t = value
+            t.caret = i
+            t.selection = nil
+            setValue(t, animated: false)
+            layoutCaret()
+            updateGestureEnabling()
+
+        case .changed:
+            guard let anchor = selectionAnchorUTF16 else { return }
+            let cur = lineLayout.index(forX: localX(for: p))
+
+            var lo = anchor, hi = cur
+            if cur < anchor { swap(&lo, &hi) }
+
+            var t = value
+            t.caret = cur
+            if lo != hi {
+                t.selection = lo..<hi
+                lastNonEmptySelectionDuringGesture = lo..<hi
+            } else {
+                // behold sidste ikke-tomme selection under gestussen
+                t.selection = lastNonEmptySelectionDuringGesture
+            }
+
+            setValue(t, animated: false)
+            layoutSelection()
+
+        case .ended, .cancelled, .failed:
+            isSelectionGestureActive = false
+            selectionAnchorUTF16 = nil
+
+            if value.selection?.isEmpty == true {
                 var t = value
-                t.caret = i
                 t.selection = nil
                 setValue(t, animated: false)
-                layoutCaret()
-                updateGestureEnabling()
+            }
+            lastNonEmptySelectionDuringGesture = nil
 
-            case .changed:
-                guard let anchor = selectionAnchorUTF16 else { return }
-                let cur = lineLayout.index(forX: localX(for: p))
-            
-                var lo = anchor, hi = cur
-                if cur < anchor { swap(&lo, &hi) }
-
-                var t = value
-                t.caret = cur
-                t.selection = (lo != hi) ? lo..<hi : nil
-                setValue(t, animated: false)
-                layoutSelection()
-
-            case .ended, .cancelled, .failed:
-                if value.selection?.isEmpty == true {
-                    var t = value; t.selection = nil; setValue(t, animated: false)
-                }
-                selectionAnchorUTF16 = nil
-                updateGestureEnabling()
+            updateGestureEnabling()
 
         default:
             break

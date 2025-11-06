@@ -38,11 +38,11 @@ struct WorkoutSessionSheet: View {
                             editStore: exerciseSession,
                             replaceExercisePayload: $replaceExercisePayload,
                             numpadHost: numpadHost,
-                            standaloneNumpadHost: standaloneNumpadHost
+                            standaloneNumpadHost: standaloneNumpadHost,
+                            proxy: proxy
                         )
                     }
                 }
-                .padding()
             }
             .onAppear(perform: {
                 tabBarVisibility.hide()
@@ -264,28 +264,39 @@ struct WorkoutSessionSheet: View {
             })
             .sheet(isPresented: $showFinishWorkoutSheet) {
                 FinishWorkoutSessionSheet(
-                    editStore: editStore) {
+                    unPerformedSets: editStore.unperformedSetsCount) {
                         showFinishWorkoutSheet = false
                     } onCompleteUnfinishedSets: {
                         showFinishWorkoutSheet = false
                         
                         Task {
                             await editStore.markAllSetsAsPerformed()
+
+                            if try await editStore.finish() {
+                                print("Marked all sets as performed, and finished successfully")
+                            }
                         }
-                        
                     } onDiscardUnfinishedSets: {
                         showFinishWorkoutSheet = false
                         
                         Task {
                             await editStore.discardAllUnperformedSets()
+                            
+                            if try await editStore.finish() {
+                                print("Discard unfinished sets, and finished succesfully")
+                            }
                         }
-                        
                     } onFinishWorkoutSession: {
                         showFinishWorkoutSheet = false
                         
-                        print("Finished workout session")
+                        Task {
+                            if try await editStore.finish() {
+                                print("Finished successfully!")
+                            }else {
+                                print("Failed finishing")
+                            }
+                        }
                     }
-
             }
             .sheet(isPresented: $showCancelWorkoutSessionSheet) {
                 CancelWorkoutSessionSheet {

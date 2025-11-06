@@ -58,7 +58,7 @@ final class ExerciseFormStore: ObservableObject {
     private func subscribeExercises() {
         exercisesTask = Task { [weak self] in
             guard let self else { return }
-            await exerciseProvider.start()
+            await exerciseProvider.boot()
             for await list in await exerciseProvider.streamAll() {
                 self.normalizedExistingNames = Set(list.map { Self.normalize($0.name) })
             }
@@ -143,6 +143,8 @@ final class ExerciseFormStore: ObservableObject {
                 }
                 
                 nameStatus = .idle
+                
+                print("Done editingee")
             }
         } catch {
             nameStatus = .invalid(error.localizedDescription)

@@ -2,8 +2,7 @@ import Foundation
 import SwiftUI
 
 struct EditSetTypeView: View {
-    
-    let editStore: any SetChildEditStore
+    let onConfirm: (_ setType: SetType) -> Void
     let close: (@escaping () -> ()) -> ()
     
     var body: some View {
@@ -11,7 +10,7 @@ struct EditSetTypeView: View {
             ForEach(SetType.allCases) { setType in
                 labelView(setType) {
                     close {
-                        editStore.setSetType(to: setType)
+                        onConfirm(setType)
                     }
                 }
             }

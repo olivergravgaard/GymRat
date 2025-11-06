@@ -36,6 +36,15 @@ enum SetType: String, Codable, CaseIterable, Identifiable, Sendable {
             return Color.green
         }
     }
+    
+    var fadedColor: Color {
+        switch self {
+        case .regular:
+            Color(red: 0.937, green: 0.937, blue: 0.937)
+        default:
+            self.color.opacity(0.2)
+        }
+    }
 }
 
 enum MetricType: String, Codable, CaseIterable, Identifiable, Sendable {

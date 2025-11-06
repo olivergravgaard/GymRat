@@ -3,28 +3,22 @@ import Combine
 
 @MainActor
 final class MuscleGroupLookupSource: ObservableObject {
-    @Published private(set) var infos: [UUID: MuscleGroupInfo] = [:]
-    private let impl: EntityLookupSource<MuscleGroupInfo>
+    @Published private(set) var names: [UUID: String] = [:]
+    private let impl: EntityLookupSource<String>
     
     init (provider: MuscleGroupProvider) {
         self.impl = .init(
             mapStream: {
                 await provider.byIdMapStream()
             },
-            project: { DTO in
-                MuscleGroupInfo(
-                    name: DTO.name
-                )
+            project: {
+                $0.name
             }
         )
-        self.impl.$values.assign(to: &self.$infos)
-    }
-    
-    func info (for id: UUID) -> MuscleGroupInfo? {
-        infos[id]
+        self.impl.$values.assign(to: &self.$names)
     }
     
     func name (for id: UUID) -> String {
-        infos[id]?.name ?? "Unknown"
+        names[id] ?? "Unknown"
     }
 }

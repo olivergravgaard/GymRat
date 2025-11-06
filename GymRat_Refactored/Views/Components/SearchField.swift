@@ -67,7 +67,7 @@ struct SearchField: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 48)
+        .frame(height: 44)
         .onChange(of: isFocused) { oldValue, newValue in
             if oldValue != newValue {
                 withAnimation(.spring(duration: 0.35, bounce: 0.1, blendDuration: 0.25)) {

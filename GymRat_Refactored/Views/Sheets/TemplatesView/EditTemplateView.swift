@@ -47,7 +47,6 @@ struct EditTemplateView: View {
                         )
                     }
                 }
-                .padding()
             }
             .onAppear {
                 tabBarVisibility.hide()
@@ -71,136 +70,157 @@ struct EditTemplateView: View {
             .ignoresSafeArea(edges: [.bottom])
             .overlay (alignment: .bottomTrailing) {
                 if !hidePropertyMenu {
-                    ExpandableMenu(
-                        progress: propertyMenuProgress,
-                        config: .init(
-                            placement: .vertical(.trailing),
-                            glassSpacing: 16,
-                            tabSize: .init(width: 55, height: 55),
-                            items: [
-                                .init(content: {
-                                    Button {
-                                        withAnimation {
-                                            propertyMenuProgress = 0
-                                        } completion: {
-                                            Task { @MainActor in
-                                                let result = try await appComp.sessionStarter.start(from: originalDTO, behavior: .ask)
-                                                
-                                                switch result {
-                                                case .started( _):
-                                                    dismiss()
-                                                    tabBarVisibility.show()
-                                                case .conflict( _):
-                                                    showOverwriteSessionSheet = true
-                                                }
-                                            }
-                                        }
-                                    } label: {
-                                        Image(systemName: "play.circle.fill")
-                                            .fontWeight(.medium)
-                                            .foregroundStyle(.indigo)
+                    HStack (alignment: .bottom, spacing: 16) {
+                        if editStore.isDirty {
+                            Button {
+                                Task {
+                                    try await editStore.save(using: originalDTO)
+                                }
+                            } label: {
+                                Capsule().fill(.green.opacity(0.3))
+                                    .frame(width: 144, height: 55)
+                                    .overlay(alignment: .center) {
+                                        Text("Save")
+                                            .foregroundStyle(.green)
+                                            .font(.caption)
+                                            .fontWeight(.bold)
                                     }
-                                    
-                                }),
-                                .init(content: {
-                                    Button {
-                                        withAnimation {
-                                            propertyMenuProgress = 0
-                                        } completion: {
-                                            showAddExerciseSheet = true
-                                        }
-                                    } label: {
-                                        Image(systemName: "xmark")
-                                            .fontWeight(.medium)
-                                            .rotationEffect(.init(degrees: 45))
-                                            .foregroundStyle(.indigo)
-                                    }
-                                    .buttonStyle(.plain)
-                                }),
-                                .init(
-                                    content: {
+                            }
+                            .glassEffect(.regular.interactive(true), in: .capsule(style: .continuous))
+
+                        }
+                        
+                        ExpandableMenu(
+                            progress: propertyMenuProgress,
+                            config: .init(
+                                placement: .vertical(.trailing),
+                                glassSpacing: 16,
+                                tabSize: .init(width: 55, height: 55),
+                                items: [
+                                    .init(content: {
                                         Button {
                                             withAnimation {
                                                 propertyMenuProgress = 0
                                             } completion: {
-                                                Task {
-                                                    let nameMap = await appComp.exerciseProvider.nameMapSnapshot()
-                                                    let items = editStore.exerciseTemplates
-                                                        .sorted { $0.exerciseChildDTO.order < $1.exerciseChildDTO.order }
-                                                        .map { exerciseTemplate in
-                                                            let title = nameMap[exerciseTemplate.exerciseChildDTO.exerciseId] ?? "Unknown"
-                                                            return ReorderItem(
-                                                                id: exerciseTemplate.id,
-                                                                title: title,
-                                                                order: exerciseTemplate.exerciseChildDTO.order
-                                                            )
-                                                        }
+                                                Task { @MainActor in
+                                                    let result = try await appComp.sessionStarter.start(from: originalDTO, behavior: .ask)
                                                     
-                                                    await MainActor.run {
-                                                        self.reorderPayload = ReorderPayload(items: items)
+                                                    switch result {
+                                                    case .started( _):
+                                                        dismiss()
+                                                        tabBarVisibility.show()
+                                                    case .conflict( _):
+                                                        showOverwriteSessionSheet = true
                                                     }
                                                 }
                                             }
                                         } label: {
-                                            Image(systemName: "shuffle")
+                                            Image(systemName: "play.circle.fill")
+                                                .fontWeight(.medium)
+                                                .foregroundStyle(.indigo)
+                                        }
+                                        
+                                    }),
+                                    .init(content: {
+                                        Button {
+                                            withAnimation {
+                                                propertyMenuProgress = 0
+                                            } completion: {
+                                                showAddExerciseSheet = true
+                                            }
+                                        } label: {
+                                            Image(systemName: "xmark")
+                                                .fontWeight(.medium)
+                                                .rotationEffect(.init(degrees: 45))
+                                                .foregroundStyle(.indigo)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }),
+                                    .init(
+                                        content: {
+                                            Button {
+                                                withAnimation {
+                                                    propertyMenuProgress = 0
+                                                } completion: {
+                                                    Task {
+                                                        let nameMap = await appComp.exerciseProvider.nameMapSnapshot()
+                                                        let items = editStore.exerciseTemplates
+                                                            .sorted { $0.exerciseChildDTO.order < $1.exerciseChildDTO.order }
+                                                            .map { exerciseTemplate in
+                                                                let title = nameMap[exerciseTemplate.exerciseChildDTO.exerciseId] ?? "Unknown"
+                                                                return ReorderItem(
+                                                                    id: exerciseTemplate.id,
+                                                                    title: title,
+                                                                    order: exerciseTemplate.exerciseChildDTO.order
+                                                                )
+                                                            }
+                                                        
+                                                        await MainActor.run {
+                                                            self.reorderPayload = ReorderPayload(items: items)
+                                                        }
+                                                    }
+                                                }
+                                            } label: {
+                                                Image(systemName: "shuffle")
+                                                    .fontWeight(.medium)
+                                                    .foregroundStyle(.indigo)
+                                            }
+                                            .buttonStyle(.plain)
+                                            
+                                        }),
+                                    .init(content: {
+                                        Button {
+                                            withAnimation {
+                                                propertyMenuProgress = 0
+                                            } completion: {
+                                                showEditTemplateSheet = true
+                                            }
+                                        } label: {
+                                            Image(systemName: "pencil")
                                                 .fontWeight(.medium)
                                                 .foregroundStyle(.indigo)
                                         }
                                         .buttonStyle(.plain)
-                                        
-                                    }),
-                                .init(content: {
+                                    })
+                                ],
+                                fixedAttribute: .spacing(16)
+                            )
+                        ) {
+                            ZStack {
+                                Group {
                                     Button {
+                                        guard propertyMenuProgress == 0 else { return }
+                                        
                                         withAnimation {
-                                            propertyMenuProgress = 0
-                                        } completion: {
-                                            showEditTemplateSheet = true
+                                            propertyMenuProgress = 1
                                         }
                                     } label: {
                                         Image(systemName: "pencil")
-                                            .fontWeight(.medium)
+                                            .foregroundStyle(.black)
+                                    }
+                                    .opacity(1 - propertyMenuProgress)
+                                    .disabled(propertyMenuProgress > 0)
+                                    
+                                    Button {
+                                        guard propertyMenuProgress == 1 else { return }
+                                        
+                                        withAnimation {
+                                            propertyMenuProgress = 0
+                                        }
+                                    } label: {
+                                        Image(systemName: "xmark")
                                             .foregroundStyle(.indigo)
                                     }
-                                    .buttonStyle(.plain)
-                                })
-                            ],
-                            fixedAttribute: .spacing(16)
-                        )
-                    ) {
-                        ZStack {
-                            Group {
-                                Button {
-                                    guard propertyMenuProgress == 0 else { return }
-                                    
-                                    withAnimation {
-                                        propertyMenuProgress = 1
-                                    }
-                                } label: {
-                                    Image(systemName: "pencil")
-                                        .foregroundStyle(.black)
+                                    .opacity(propertyMenuProgress)
+                                    .disabled(propertyMenuProgress < 1)
                                 }
-                                .opacity(1 - propertyMenuProgress)
-                                .disabled(propertyMenuProgress > 0)
-                                
-                                Button {
-                                    guard propertyMenuProgress == 1 else { return }
-                                    
-                                    withAnimation {
-                                        propertyMenuProgress = 0
-                                    }
-                                } label: {
-                                    Image(systemName: "xmark")
-                                        .foregroundStyle(.indigo)
-                                }
-                                .opacity(propertyMenuProgress)
-                                .disabled(propertyMenuProgress < 1)
+                                .fontWeight(.medium)
                             }
-                            .fontWeight(.medium)
                         }
+                        .padding(.trailing)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
-                    .padding(.trailing)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
+                    }
             }
             .animation(.smooth(duration: 0.3), value: hidePropertyMenu)
             .onChange(of: numpadHost.activeId, { oldValue, newValue in

@@ -163,9 +163,9 @@ final class SetTemplateEditStore: @MainActor SetChildEditStore {
     
     var repsTargetColor: Color {
         if repsType == .none {
-            return .black
+            return .gray
         }
         
-        return .indigo
+        return .black
     }
 }

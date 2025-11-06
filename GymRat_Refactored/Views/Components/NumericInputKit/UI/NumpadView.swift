@@ -1,203 +1,19 @@
 import UIKit
 import ObjectiveC.runtime
-/*
-final class NumpadView: UIView {
-    private weak var sink: NumpadKeySink?
-    private let showNavigation: Bool
-    
-    init(host: any NumpadHosting) {
-        self.sink = host
-        self.showNavigation = host.supportsNavigation
-        super.init(frame: .zero)
-        isOpaque = true
-        backgroundColor = .secondarySystemBackground
-        layer.shadowColor = UIColor.black.cgColor
-        layer.shadowOpacity = 0.1
-        layer.shadowRadius = 8
-        layer.shadowOffset = .init(width: 0,height: -2)
-        buildLayout()
-    }
-    
-    required init?(coder: NSCoder) {
-        fatalError()
-    }
-    
-    private func buildLayout() {
-        let rows = UIStackView()
-        rows.axis = .vertical
-        rows.alignment = .fill
-        rows.distribution = .fillEqually
-        rows.spacing = 8
-        rows.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(rows)
-        NSLayoutConstraint.activate(
-            [
-                rows.leadingAnchor.constraint(
-                    equalTo: leadingAnchor,
-                    constant: 12
-                ),
-                rows.trailingAnchor.constraint(
-                    equalTo: trailingAnchor,
-                    constant: -12
-                ),
-                rows.topAnchor.constraint(
-                    equalTo: safeAreaLayoutGuide.topAnchor,
-                    constant: 8
-                ),
-                rows.bottomAnchor.constraint(
-                    equalTo: safeAreaLayoutGuide.bottomAnchor,
-                    constant: -8
-                )
-            ]
-        )
-        
-        func row(_ items: [UIButton]) -> UIStackView {
-            let r = UIStackView(arrangedSubviews: items)
-            r.axis = .horizontal
-            r.alignment = .fill
-            r.distribution = .fillEqually
-            r.spacing = 8
-            return r
-        }
-        
-        func key(_ title: String, _ action: Selector) -> UIButton {
-            let b = UIButton(type: .system)
-            b.setTitle(title,for: .normal)
-            b.titleLabel?.font = .systemFont(ofSize: 22, weight: .semibold)
-            b.backgroundColor = .systemBackground
-            b.layer.cornerRadius = 12
-            b.layer.borderWidth = 0.5
-            b.layer.borderColor = UIColor.separator.cgColor
-            b.addTarget(self, action: action, for: .touchUpInside)
-            return b
-        }
-        
-        rows.addArrangedSubview(
-            row(
-                [
-                    key("1", #selector(t1)),
-                    key("2", #selector(t2)),
-                    key("3", #selector(t3)),
-                    key("Prev", #selector(prev))
-                ]
-            )
-        )
-        
-        rows.addArrangedSubview(
-            row(
-                [
-                    key("4", #selector(t4)),
-                    key("5", #selector(t5)),
-                    key("6", #selector(t6)),
-                    key("Next", #selector(didTapNext))
-                ]
-            )
-        )
-        
-        rows.addArrangedSubview(
-            row(
-                [
-                    key("7", #selector(t7)),
-                    key("8", #selector(t8)),
-                    key("9", #selector(t9)),
-                    key(
-                        "⌫",
-                        #selector(
-                            backspace
-                        )
-                    )
-                ]
-            )
-        )
-        
-        rows.addArrangedSubview(
-            row(
-                [
-                    key(".", #selector(dot)),
-                    key("0", #selector(t0)),
-                    key("Clear", #selector(clear)),
-                    key("Done", #selector(done))
-                ]
-            )
-        )
-    }
-    
-    @objc private func t0() {
-        sink?.handleKey(.digit("0"))
-    }
-    
-    @objc private func t1() {
-        sink?.handleKey(.digit("1"))
-    }
-    
-    @objc private func t2() {
-        sink?.handleKey(.digit("2"))
-    }
-    
-    @objc private func t3() {
-        sink?.handleKey(.digit("3"))
-    }
-    
-    @objc private func t4() {
-        sink?.handleKey(.digit("4"))
-    }
-    
-    @objc private func t5() {
-        sink?.handleKey(.digit("5"))
-    }
-    
-    @objc private func t6() {
-        sink?.handleKey(.digit("6"))
-    }
-    
-    @objc private func t7() {
-        sink?.handleKey(.digit("7"))
-    }
-    
-    @objc private func t8() {
-        sink?.handleKey(.digit("8"))
-    }
-    
-    @objc private func t9() {
-        sink?.handleKey(.digit("9"))
-    }
-    
-    @objc private func dot() {
-        sink?.handleKey(.decimal)
-    }
-    
-    @objc private func backspace() {
-        sink?.handleKey(.backspace)
-    }
-    
-    @objc private func clear() {
-        sink?.handleKey(.clear)
-    }
-    
-    @objc private func didTapNext() {
-        sink?.handleKey(.next)
-    }
-    
-    @objc private func prev() {
-        sink?.handleKey(.prev)
-    }
-    
-    @objc private func done() {
-        sink?.handleKey(.done)
-    }
-}
-*/
-
 
 final class NumpadView: UIView {
     private weak var sink: NumpadKeySink?
     private var currentTree: KeyboardNode?
+    
+    private let downFeedback = UIImpactFeedbackGenerator(style: .light)
 
     init(host: any NumpadHosting) {
         self.sink = host
         super.init(frame: .zero)
         isOpaque = false
         backgroundColor = .clear
+        
+        downFeedback.prepare()
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -365,12 +181,16 @@ final class NumpadView: UIView {
         b.layer.borderColor = style.borderColor.cgColor
         b.setTitleColor(style.titleColor, for: .normal)
         objc_setAssociatedObject(b, &AssociatedKey.payloadKey, Payload(key: key), .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        
         b.addTarget(self, action: #selector(onTap(_:)), for: .touchUpInside)
+        
         return b
     }
 
     @objc private func onTap(_ sender: UIButton) {
         if let payload = objc_getAssociatedObject(sender, &AssociatedKey.payloadKey) as? Payload {
+            downFeedback.impactOccurred()
+            downFeedback.prepare()
             sink?.handleKey(payload.key)
         }
     }

@@ -160,7 +160,7 @@ struct ExpandableMenu<Label: View>: View, Animatable {
                                     offset(proxy: proxy,
                                            containerRect: containerRect,
                                            labelRect: labelRect,
-                                           config: config
+                                           isHorizontal: config.placement.axis == .horizontal
                                           )
                                 )
                         }
@@ -206,14 +206,14 @@ struct ExpandableMenu<Label: View>: View, Animatable {
         return max(progress > 0.5 ? (1 - progress) / 0.5 : (progress / 0.5), 0)
     }
     
-    nonisolated private func offset (proxy: GeometryProxy, containerRect: CGRect, labelRect: CGRect, config: ExpandableMenuConfig) -> CGSize {
+    nonisolated private func offset (proxy: GeometryProxy, containerRect: CGRect, labelRect: CGRect, isHorizontal: Bool) -> CGSize {
         let minX = proxy.frame(in: .named("container")).minX
         let minY = proxy.frame(in: .named("container")).minY
         
         var x: CGFloat = 0
         var y: CGFloat = 0
         
-        if config.isHorizontal {
+        if isHorizontal {
             x = (labelRect.minX - minX) * (1 - progress)
         }else {
             y = (labelRect.minY - minY) * (1 - progress)

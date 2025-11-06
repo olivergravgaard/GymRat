@@ -26,4 +26,16 @@ final class ExerciseSession: Equatable, Identifiable {
         self.setSessions = []
         self.settingsData = ExerciseSettings.defaultSettings.encoded()
     }
+    
+    func toDTO () -> ExerciseSessionDTO {
+        .init(
+            id: self.id,
+            exerciseId: self.exercise.id,
+            order: self.order,
+            settings: self.settings,
+            sets: self.setSessions.map({
+                $0.toDTO()
+            })
+        )
+    }
 }

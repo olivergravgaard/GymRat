@@ -42,20 +42,26 @@ struct SetTemplateView: View {
                         extraBounce: 0,
                         animation: .smooth(duration: 0.3)
                     )) {
-                        Text("\(editStore._setTypeDisplay)")
-                            .font(.footnote)
-                            .fontWeight(.bold)
-                            .foregroundColor(editStore.setTypeColor)
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(editStore.setDTO.setType.fadedColor)
                             .frame(width: 55, height: 32, alignment: .center)
-                            .background {
-                                RoundedRectangle(cornerRadius: 12).fill(.white)
+                            .overlay (alignment: .center) {
+                                Text("\(editStore._setTypeDisplay)")
+                                    .font(.footnote)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(editStore.setDTO.setType.color)
                             }
                     } menu: { close in
-                        EditSetTypeView(
-                            editStore: editStore,
-                            close: close
-                        )
+                        EditSetTypeView { setType in
+                            editStore.setSetType(to: setType)
+                        } close: { onClosed in
+                            close {
+                                onClosed()
+                            }
+                        }
+
                     }
+                    .animation(.snappy(duration: 0.3), value: editStore.setDTO.setType)
                 
                 FieldRow(
                     id: editStore.weightTargetFieldId,
@@ -75,6 +81,10 @@ struct SetTemplateView: View {
                 )
                 .frame(maxWidth: .infinity, alignment: .center)
                 .frame(height: 32, alignment: .center)
+                .background {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(red: 0.937, green: 0.937, blue: 0.937))
+                }
                 .onChange(of: weightTargetText) { _, _ in
                     commitWeightTarget()
                 }
@@ -87,13 +97,14 @@ struct SetTemplateView: View {
                         extraBounce: 0,
                         animation: .smooth(duration: 0.3)
                     )) {
-                        Text(editStore.repsTargetDisplay)
-                            .font(.footnote)
-                            .fontWeight(.bold)
-                            .foregroundColor(editStore.repsTargetColor)
-                            .frame(width: 55, height: 32, alignment: .center)
-                            .background {
-                                RoundedRectangle(cornerRadius: 12).fill(.white)
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(red: 0.937, green: 0.937, blue: 0.937))
+                            .frame(width: 55, height: 32)
+                            .overlay (alignment: .center) {
+                                Text(editStore.repsTargetDisplay)
+                                    .font(.footnote)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(editStore.repsTargetColor)
                             }
                     } menu: { close in
                         RepRangeSelectionMenu(
@@ -105,39 +116,6 @@ struct SetTemplateView: View {
                     }
             }
             .frame(height: 44)
-            .swipeActions(
-                config: .init(
-                    leadingPadding: 8,
-                    trailingPadding: 8,
-                    spacing: 8,
-                    occupiesFullWidth: false
-                )) {
-                    SwipeAction(
-                        symbolImage: "trash",
-                        tint: .red,
-                        background: .red.opacity(0.1),
-                        font: .caption,
-                        size: .init(width: 44, height: 44)) { close in
-                            close  {
-                                withAnimation (.snappy(duration: 0.3)) {
-                                    editStore.removeSelf()
-                                }
-                            }
-                        }
-                    
-                    SwipeAction(
-                        symbolImage: "timer",
-                        tint: .green,
-                        background: .green.opacity(0.1),
-                        font: .caption,
-                        size: .init(width: 44, height: 44)) { close in
-                            close {
-                                withAnimation(.snappy(duration: 0.3)) {
-                                    editStore.addRestTemplate()
-                                }
-                            }
-                        }
-                }
             
             if editStore.hasRest {
                 Group {
@@ -175,7 +153,7 @@ struct SetTemplateView: View {
                         text: $restText
                     )
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .frame(height: restActive ? 24 : 14 + (10 * restSwipeProgress), alignment: .center)
+                    .frame(height: restActive ? 32 : 22 + (10 * restSwipeProgress), alignment: .center)
                     .background {
                         RoundedRectangle(cornerRadius: 12).fill(.indigo)
                     }
@@ -192,33 +170,80 @@ struct SetTemplateView: View {
                         let formatted = formatRest(seconds)
                         restText = formatted
                     })
-                    .swipeActions(
-                        config: .init(
-                            leadingPadding: 8,
-                            trailingPadding: 8,
-                            spacing: 8,
-                            occupiesFullWidth: false
-                        ), progress: $restSwipeProgress) {
-                            SwipeAction(
-                                symbolImage: "trash",
-                                tint: .red,
-                                background: .red.opacity(0.1),
-                                font: .caption,
-                                size: .init(width: 24, height: 24)) { close in
-                                    close{
-                                        withAnimation(.snappy(duration: 0.3)) {
-                                            editStore.removeRestTemplate()
-                                        } completion: {
-                                            Task {
-                                                numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
-                                            }
-                                        }
-                                    }
-                                }
-                        }
                 }
+                .swipeToTrigger(
+                    leftSwipeConfig: .init(
+                        direction: .left,
+                        isDeletion: true,
+                        threshold: 0.6,
+                        backgroundColor: .red.opacity(0.2),
+                        actionView: {
+                            Image(systemName: "trash")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.red)
+                                .padding(.horizontal)
+                        },
+                        onTrigger: {
+                            withAnimation(.snappy(duration: 0.3)) {
+                                editStore.removeRestTemplate()
+                            } completion: {
+                                Task {
+                                    numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
+                                }
+                            }
+                        }
+                    ),
+                    rightSwipeConfig: nil, occupiesFullWidth: true
+                )
             }
         }
+        .swipeToTrigger(
+            leftSwipeConfig: .init(
+                direction: .left,
+                isDeletion: true,
+                threshold: 0.6,
+                backgroundColor: .red.opacity(0.2),
+                actionView: {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal)
+                },
+                onTrigger: {
+                    withAnimation(.snappy(duration: 0.3)) {
+                        editStore.removeSelf()
+                    } completion: {
+                        Task {
+                            numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
+                        }
+                    }
+                }
+            ),
+            rightSwipeConfig: .init(
+                direction: .right,
+                isDeletion: false,
+                threshold: 0.4,
+                backgroundColor: .green.opacity(0.2),
+                actionView: {
+                    Image(systemName: "timer")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.green)
+                        .padding(.horizontal)
+                },
+                onTrigger: {
+                    withAnimation(.snappy(duration: 0.3)) {
+                        editStore.addRestTemplate()
+                    } completion: {
+                        Task {
+                            numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
+                        }
+                    }
+                }
+            ), occupiesFullWidth: true
+        )
     }
     
     private func commitWeightTarget () {
@@ -232,7 +257,7 @@ struct SetTemplateView: View {
         guard let restTemplate = editStore.setDTO.restTemplate else { return }
         
         if let v = parseRest(restText), v != restTemplate.duration {
-            editStore.setRestDuration(v)
+            editStore.setRestDuration(v, source: .view)
             editStore.delegate?.childDidChange()
         }
     }

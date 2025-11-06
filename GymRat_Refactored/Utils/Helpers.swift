@@ -38,6 +38,42 @@ public func formatRest(_ v: Int?) -> String {
     }
 }
 
+public func formatTime(_ v: Int) -> String {
+    var seconds = v
+    
+    let days = seconds / 86400
+    seconds %= 86400
+    
+    let hours = seconds / 3600
+    seconds %= 3600
+    
+    let minutes = seconds / 60
+    seconds %= 60
+
+    var parts: [String] = []
+    
+    if days > 0 {
+        parts.append("\(days)d")
+    }
+    
+    if hours > 0 {
+        parts.append("\(hours)h")
+    }
+    
+    if minutes > 0 || hours > 0 {
+        let m = (hours > 0 && minutes == 0) ? "00" : "\(minutes)"
+        parts.append("\(m)m")
+    }
+    
+    if parts.isEmpty {
+        parts.append("\(seconds)s")
+    } else {
+        parts.append("\(seconds)s")
+    }
+    
+    return parts.joined(separator: " ")
+}
+
 public func parseRest(_ s: String) -> Int? {
     let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return nil }

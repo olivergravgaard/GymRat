@@ -7,7 +7,7 @@ struct FieldRow: View {
     let config: FieldConfig
     
     @Binding var text: String
-
+    
     var body: some View {
         FieldCellRepresentable(
             text: $text,

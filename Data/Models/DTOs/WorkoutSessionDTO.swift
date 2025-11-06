@@ -61,5 +61,13 @@ nonisolated struct WorkoutSessionDTO: Equatable, Identifiable, Sendable, Codable
             version: 0
         )
     }
+    
+    func totalSetsCount() -> Int {
+        self.exercises.reduce(0) { $0 + $1.sets.count }
+    }
+
+    func performedSetsCount() -> Int {
+        self.exercises.flatMap(\.sets).reduce(into: 0) { $0 += ($1.performed == true) ? 1 : 0 }
+    }
 }
 

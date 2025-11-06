@@ -13,8 +13,13 @@ struct SetSessionView: View {
     
     var initialWeight: String {
         let formatted = formatWeight(editStore.setDTO.weight)
-        if formatted == "0.0" {
-            return ""
+        
+        if formatted == "0.0" || formatted == "0,0" || formatted == "0" {
+            guard let prevPerformedWeight = editStore.prevPerformedWeight else {
+                return ""
+            }
+            
+            return formatWeight(prevPerformedWeight)
         }
         
         return formatted
@@ -22,7 +27,11 @@ struct SetSessionView: View {
     
     var initialReps: String {
         if editStore.setDTO.reps == 0 {
-            return ""
+            guard let prevPerformedReps = editStore.prevPerformedReps else {
+                return ""
+            }
+            
+            return String(prevPerformedReps)
         }
         
         return String(editStore.setDTO.reps)
@@ -65,13 +74,17 @@ struct SetSessionView: View {
                                 RoundedRectangle(cornerRadius: 12).fill(.white)
                             }
                     } menu: { close in
-                        EditSetTypeView(
-                            editStore: editStore,
-                            close: close
-                        )
+                        EditSetTypeView { setType in
+                            editStore.setSetType(to: setType)
+                        } close: { onClosed in
+                            close {
+                                onClosed()
+                            }
+                        }
+
                     }
                 
-                Text("90 kg x 7")
+                Text("\(editStore.prevPerformedDisplay)")
                     .frame(width: 96, height: 32, alignment: .center)
                     .font(.caption)
                     .fontWeight(.medium)
@@ -131,7 +144,8 @@ struct SetSessionView: View {
                         editStore.unmarkPerformed()
                     }else {
                         editStore.markPerformed()
-                        
+                        commitWeight()
+                        commitReps()
                         editStore.startRest()
                     }
                 } label: {
@@ -150,6 +164,12 @@ struct SetSessionView: View {
                 }
                 
             }
+            .onReceive(editStore.weightAndRestChangeExternal, perform: { (weight, reps) in
+                print("Received")
+                guard let weight = weight, let reps = reps else { return }
+                weightText = formatWeight(weight)
+                repsText = String(reps)
+            })
             .frame(height: 44)
             .padding(.horizontal, 6)
             .background {
@@ -189,12 +209,14 @@ struct SetSessionView: View {
                             close {
                                 withAnimation (.snappy(duration: 0.3)) {
                                     editStore.addRestSession()
-                                } completion: {
-                                    restText = initialRestText
                                 }
                             }
                         }
                 }
+                .onReceive(editStore.restDidChangeExternal, perform: { seconds in
+                    let formatted = formatRest(seconds)
+                    restText = formatted
+                })
             
             if editStore.hasRest {
                 let active = editStore.restTick?.isFinished == false
@@ -350,7 +372,7 @@ struct SetSessionView: View {
         guard let restSession = editStore.setDTO.restSession else { return }
         
         if let v = parseRest(restText), v != restSession.duration {
-            editStore.setRestDuration(v)
+            editStore.setRestDuration(v, source: .view)
             editStore.delegate?.childDidChange()
         }
     }
