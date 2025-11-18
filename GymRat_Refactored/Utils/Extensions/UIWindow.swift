@@ -22,4 +22,8 @@ extension UIScreen {
     static var size: CGSize {
         return Self.current?.bounds.size ?? .zero
     }
+    
+    static var safeAreaInsets: UIEdgeInsets {
+        return UIWindow.current?.safeAreaInsets ?? .zero
+    }
 }

@@ -43,7 +43,7 @@ struct SessionRibbonView: View {
     
     private var progress: CGFloat {
         guard let active = store.active else { return 0 }
-        return CGFloat(active.performedSetsCount()) / CGFloat(active.totalSetsCount())
+        return CGFloat(active.performedSetsCount) / CGFloat(active.totalSetsCount)
     }
 
     var body: some View {
@@ -94,7 +94,7 @@ struct SessionRibbonView: View {
                         }
                         
                         HStack {
-                            Text("\(active.performedSetsCount()) / \(active.totalSetsCount()) sets")
+                            Text("\(active.performedSetsCount) / \(active.totalSetsCount) sets")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.indigo)
                             Spacer()

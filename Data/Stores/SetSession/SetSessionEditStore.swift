@@ -24,6 +24,7 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     let weightFieldId = UUID()
     let repsFieldId = UUID()
     let restFieldId = UUID()
+    let activeRestFieldId = UUID()
     
     enum UpdateSource {
         case view, external
@@ -49,25 +50,18 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
         self.orchestrator = orchestrator
         
         subscribeToRestTicks()
+        
     }
     
     deinit {
         tickTask?.cancel()
     }
     
-    var hasRest: Bool {
-        setDTO.restSession != nil
-    }
-    
-    var isWarmup: Bool {
-        return setDTO.setType == .warmup
-    }
-    
     func addRestSession () {
         guard !hasRest else { return }
         let restSession = parentEditStore.getDefuaultRestSession(for: setDTO.setType)
         restDidChangeExternal.send(restSession.duration)
-        setDTO.restSession = parentEditStore.getDefuaultRestSession(for: setDTO.setType)
+        setDTO.restSession = restSession
         delegate?.childDidChange()
     }
     
@@ -82,17 +76,6 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
         }
     }
     
-    func addTimeToRest (_ seconds: Int) {
-        guard hasRest, setDTO.restSession?.restState == .running else { return }
-        
-        setDTO.restSession!.duration += seconds
-        delegate?.childDidChange()
-        
-        Task {
-            await orchestrator.adjust(by: seconds)
-        }
-    }
-    
     func setRestDuration (_ seconds: Int?, source: UpdateSource = .view) {
         guard hasRest, let seconds = seconds else { return }
         setDTO.restSession!.duration = max(0, seconds)
@@ -104,7 +87,7 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     }
     
     func startRest () {
-        if !hasRest { return }
+        guard let rest = setDTO.restSession, rest.restState != .running else { return }
         let now = Date()
         let total = max(0, setDTO.restSession?.duration ?? 0)
         
@@ -121,32 +104,268 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     }
     
     func stopRest () {
-        let ended = Date()
+        guard hasRest, let rest = setDTO.restSession, rest.restState == .running else { return }
         
-        if hasRest {
-            setDTO.restSession!.endedAt = ended
-            setDTO.restSession!.restState = .completed
-            delegate?.childDidChange()
-        }
+        setDTO.restSession!.restState = .completed
+        setDTO.restSession!.endedAt = Date()
+        
+        delegate?.childDidChange()
         
         Task {
-            await orchestrator.stopIfActive(setId: id, sendFinal: true)
+            await orchestrator.stopIfActive(setId: id, sendFinal: false)
+        }
+    }
+    
+    func cancelRest () {
+        guard hasRest, let rest = setDTO.restSession else { return }
+        
+        setDTO.restSession!.startedAt = nil
+        setDTO.restSession!.endedAt = nil
+        setDTO.restSession!.pausedRemaining = nil
+        setDTO.restSession!.restState = .idle
+        
+        restTick = nil
+        delegate?.childDidChange()
+        
+        Task {
+            await orchestrator.stopIfActive(setId: id, sendFinal: false)
+        }
+    }
+    
+    func resetRest () {
+        guard hasRest else { return }
+        
+        let total = max(0, setDTO.restSession!.duration)
+        let state = setDTO.restSession!.restState
+        
+        switch state {
+        case .running:
+            let now = Date()
+            setDTO.restSession!.startedAt = now
+            setDTO.restSession!.endedAt = nil
+            setDTO.restSession!.pausedRemaining = nil
+            setDTO.restSession!.restState = .running
+            
+            restTick = .init(setId: id, total: total, remaining: total, isFinished: false)
+            
+            delegate?.childDidChange()
+            
+            Task {
+                await orchestrator.start(setId: id, total: total, startedAt: now)
+            }
+            
+        case .paused:
+            setDTO.restSession!.startedAt = nil
+            setDTO.restSession!.endedAt = nil
+            setDTO.restSession!.pausedRemaining = total
+            setDTO.restSession!.restState = .paused
+            
+            restTick = .init(setId: id, total: total, remaining: total, isFinished: false)
+            
+            delegate?.childDidChange()
+            
+            Task {
+                await orchestrator.stopIfActive(setId: id, sendFinal: false)
+            }
+        case .idle, .completed:
+            setDTO.restSession!.startedAt = nil
+            setDTO.restSession!.endedAt = nil
+            setDTO.restSession!.pausedRemaining = nil
+            setDTO.restSession!.restState = .idle
+            
+            restTick = nil
+            delegate?.childDidChange()
+            
+            Task {
+                await orchestrator.stopIfActive(setId: id, sendFinal: false)
+            }
+        }
+    }
+    
+    func skipRest () {
+        
+    }
+    
+    func togglePauseRest () {
+        guard hasRest, let state = setDTO.restSession?.restState, state == .running || state == .paused else { return }
+        
+        switch state {
+            case .running:
+                pauseRest()
+            case .paused:
+                resumeRest()
+            default:
+                return
+        }
+    }
+    
+    func adjustActiveRest (by delta: Int) {
+        guard hasRest, let rest = setDTO.restSession else { return }
+        
+        switch rest.restState {
+        case .running:
+            let newDuration = max(0, rest.duration + delta)
+            setDTO.restSession!.duration = newDuration
+            delegate?.childDidChange()
+            
+            Task {
+                await orchestrator.adjust(by: delta)
+            }
+            
+        case .paused:
+            let newTotal = max(0, rest.duration + delta)
+            let newRem = max(0, (rest.pausedRemaining ?? rest.duration) + delta)
+            setDTO.restSession!.duration = newTotal
+            setDTO.restSession!.pausedRemaining = newRem
+            
+            if newRem == 0 {
+                setDTO.restSession!.restState = .completed
+                setDTO.restSession!.pausedRemaining = nil
+                setDTO.restSession!.endedAt = Date()
+                restTick = nil
+                delegate?.childDidChange()
+                
+                Task {
+                    await orchestrator.stopIfActive(setId: id, sendFinal: false)
+                }
+                
+                return
+            }
+            
+            restTick = .init(
+                setId: id,
+                total: newTotal,
+                remaining: newRem,
+                isFinished: false
+            )
+            
+            delegate?.childDidChange()
+        default:
+            return
+        }
+    }
+    
+    private func pauseRest () {
+        Task { [weak self] in
+            guard let self else { return }
+            if let rem = await orchestrator.pause(setId: self.id) {
+                self.setDTO.restSession!.pausedRemaining = rem
+                self.setDTO.restSession!.startedAt = nil
+                self.setDTO.restSession!.endedAt = nil
+                self.setDTO.restSession!.restState = .paused
+                
+                let total = self.setDTO.restSession!.duration
+                self.restTick = .init(setId: self.id, total: total, remaining: rem, isFinished: false)
+                self.delegate?.childDidChange()
+            }
+        }
+    }
+    
+    private func resumeRest () {
+        let now = Date()
+        let total = max(0, setDTO.restSession!.duration)
+        let rem = max(0, setDTO.restSession!.pausedRemaining ?? total)
+        
+        setDTO.restSession!.startedAt = now
+        setDTO.restSession!.endedAt = nil
+        setDTO.restSession!.restState = .running
+        setDTO.restSession!.pausedRemaining = nil
+        delegate?.childDidChange()
+        
+        restTick = .init(
+            setId: id,
+            total: total,
+            remaining: rem,
+            isFinished: false
+        )
+        
+        Task {
+            await orchestrator
+                .resumeFromPause(
+                    setId: id,
+                    total: total,
+                    remaining: rem,
+                    startedAt: now
+                )
+        }
+    }
+    
+    private func reconcileRestStateBeforeSubscribe () async {
+        await MainActor.run {
+            guard let r = self.setDTO.restSession else {
+                self.restTick = nil
+                return
+            }
+            
+            switch r.restState {
+            case .running:
+                if let startedAt = r.startedAt {
+                    Task { [weak self] in
+                        guard let self else { return }
+                        await self.orchestrator.restoreIfNeeded(
+                            setId: self.id,
+                            total: r.duration,
+                            startedAt: startedAt
+                        )
+                    }
+                }else {
+                    self.restTick = .init(
+                        setId: self.id,
+                        total: r.duration,
+                        remaining: r.duration,
+                        isFinished: false
+                    )
+                }
+            case .paused:
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.orchestrator.stopIfActive(setId: self.id, sendFinal: false)
+                }
+                let rem = r.pausedRemaining ?? r.duration
+                self.restTick = .init(
+                    setId: self.id,
+                    total: r.duration,
+                    remaining: rem,
+                    isFinished: false
+                )
+            default:
+                self.restTick = nil
+            }
         }
     }
     
     private func subscribeToRestTicks () {
         tickTask?.cancel()
+        
         tickTask = Task { [weak self] in
             guard let self else { return }
+            
+            await self.reconcileRestStateBeforeSubscribe()
+            
             let stream = await orchestrator.subscribe(setId: self.id)
+            
             for await tick in stream {
                 await MainActor.run {
+                    
+                    if self.setDTO.restSession?.restState == .paused {
+                        return
+                    }
+                    
+                    if tick.total == 0, tick.remaining == 0, tick.isFinished {
+                        if self.setDTO.restSession?.restState == .paused {
+                            return
+                        }
+                        
+                        self.restTick = nil
+                        return
+                    }
+                    
                     self.restTick = tick
                 }
             }
         }
     }
-    
+
     func setSetType (to setType: SetType) {
         guard setDTO.setType != setType else { return }
         setDTO.setType = setType
@@ -197,6 +416,7 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     func markPerformed () {
         guard setDTO.performed == false else { return }
         setDTO.performed = true
+        startRest()
         
         self.delegate?.childDidChange()
     }
@@ -204,6 +424,7 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     func unmarkPerformed () {
         guard setDTO.performed == true else { return }
         setDTO.performed = false
+        cancelRest()
         
         self.delegate?.childDidChange()
     }
@@ -212,11 +433,15 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
         return setDTO
     }
     
-    func getLocalFieldsORder () -> [UUID] {
+    func getLocalFieldsOrder () -> [UUID] {
         var final: [UUID] = [weightFieldId, repsFieldId]
         
-        if setDTO.restSession != nil {
-            final.append(restFieldId)
+        if let restSession = setDTO.restSession {
+            if restSession.restState == .running || restSession.restState == .paused {
+                final.append(activeRestFieldId)
+            }else {
+                final.append(restFieldId)
+            }
         }
         
         return final
@@ -224,6 +449,24 @@ final class SetSessionEditStore: @MainActor SetChildEditStore {
     
     func getGlobalFieldsOrder () async -> [UUID] {
         return await parentEditStore.getGlobalFieldsOrder()
+    }
+    
+    var hasRest: Bool {
+        setDTO.restSession != nil
+    }
+    
+    var isWarmup: Bool {
+        return setDTO.setType == .warmup
+    }
+    
+    var restComplete: Bool {
+        guard hasRest else { return false }
+        
+        if setDTO.restSession!.restState == .completed {
+            return true
+        }
+        
+        return false
     }
     
     var setTypeColor: Color {

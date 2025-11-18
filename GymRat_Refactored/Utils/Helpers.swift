@@ -145,3 +145,10 @@ public func parseWeight (_ s: String) -> Double? {
 public func parse (_ s: String) -> Int? {
     Int(s)
 }
+
+public func formatDate (_ date: Date, locale: Locale = .current) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = locale
+    formatter.dateFormat = "d. MMMM yyyy"
+    return formatter.string(from: date)
+}

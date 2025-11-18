@@ -39,7 +39,8 @@ final class WorkoutTemplateEditStore: WorkoutTemplateChildDelegate {
             exerciseId: exerciseId,
             order: nextOrder,
             sets: [],
-            settings: ExerciseSettings.defaultSettings
+            settings: ExerciseSettings.defaultSettings,
+            notes: []
         )
         
         let store = ExerciseTemplateEditStore(dto: dto, delegate: self, parentEditStore: self)
@@ -60,7 +61,8 @@ final class WorkoutTemplateEditStore: WorkoutTemplateChildDelegate {
                 exerciseId: exerciseId,
                 order: nextOrder,
                 sets: [],
-                settings: ExerciseSettings.defaultSettings
+                settings: ExerciseSettings.defaultSettings,
+                notes: []
             )
             
             let store = ExerciseTemplateEditStore(dto: dto, delegate: self, parentEditStore: self)

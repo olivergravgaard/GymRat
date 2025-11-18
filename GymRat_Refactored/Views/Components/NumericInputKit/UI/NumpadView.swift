@@ -47,19 +47,55 @@ final class NumpadView: UIView {
         switch node {
         case .empty:
             return UIView()
-
+            
         case .spacer(let flex):
             let v = UIView()
             if flex > 1 {
-                // i en stack anvender vi setContentHugging/Compression så den får plads
                 v.setContentHuggingPriority(.defaultLow, for: .horizontal)
                 v.setContentHuggingPriority(.defaultLow, for: .vertical)
             }
             return v
-
+            
         case .button(let title, let key, let style):
             return makeButton(title: title, key: key, style: style)
+            
+            
+        case .imageButton(let imageName, sends: let key, let style):
+            return makeImageButton(imageName: imageName, key: key, style: style)
+            
+        case .frame(let width, let height, let child):
+            let container = UIView()
+            let inner = makeView(for: child)
+            inner.translatesAutoresizingMaskIntoConstraints = false
 
+            container.addSubview(inner)
+            NSLayoutConstraint.activate([
+                inner.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                inner.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                inner.topAnchor.constraint(equalTo: container.topAnchor),
+                inner.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            ])
+
+            // Hvis width/height er sat, så giv faste constraints
+            if let w = width {
+                let c = container.widthAnchor.constraint(equalToConstant: w)
+                c.priority = .required
+                c.isActive = true
+            }
+            if let h = height {
+                let c = container.heightAnchor.constraint(equalToConstant: h)
+                c.priority = .required
+                c.isActive = true
+            }
+
+            // Hvis de IKKE er sat, så skal viewet “tage alt den plads det kan”.
+            // Det gør vi ved at gøre det villigt til at udvide sig:
+            inner.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            inner.setContentHuggingPriority(.defaultLow, for: .vertical)
+            inner.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            inner.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+
+            return container
         case .vstack(let spacing, let children):
             let sv = UIStackView()
             sv.axis = .vertical
@@ -68,7 +104,7 @@ final class NumpadView: UIView {
             sv.spacing = spacing
             children.forEach { sv.addArrangedSubview(makeView(for: $0)) }
             return sv
-
+            
         case .hstack(let spacing, let children):
             let sv = UIStackView()
             sv.axis = .horizontal
@@ -77,50 +113,7 @@ final class NumpadView: UIView {
             sv.spacing = spacing
             children.forEach { sv.addArrangedSubview(makeView(for: $0)) }
             return sv
-
-        case .grid(let columns, let rowSpacing, let colSpacing, let items):
-            let rows = Int(ceil(Double(items.count) / Double(max(1, columns))))
-            let vStack = UIStackView()
-            vStack.axis = .vertical
-            vStack.alignment = .fill
-            vStack.distribution = .fillEqually
-            vStack.spacing = rowSpacing
-
-            for r in 0..<rows {
-                let h = UIStackView()
-                h.axis = .horizontal
-                h.alignment = .fill
-                h.distribution = .fillEqually
-                h.spacing = colSpacing
-                let start = r*columns
-                let end = min(start+columns, items.count)
-                for i in start..<end {
-                    h.addArrangedSubview(makeView(for: items[i]))
-                }
-                // fyld op med tomme så alle rækker har columns
-                if end - start < columns {
-                    for _ in 0..<(columns - (end - start)) {
-                        h.addArrangedSubview(UIView())
-                    }
-                }
-                vStack.addArrangedSubview(h)
-            }
             
-            return vStack
-
-        case .box(let padding, let child):
-            let container = UIView()
-            let inner = makeView(for: child)
-            inner.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(inner)
-            NSLayoutConstraint.activate([
-                inner.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: padding.left),
-                inner.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -padding.right),
-                inner.topAnchor.constraint(equalTo: container.topAnchor, constant: padding.top),
-                inner.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -padding.bottom),
-            ])
-            return container
-
         case .aspectRatio(let ratio, let child):
             let container = UIView()
             let inner = makeView(for: child)
@@ -137,7 +130,7 @@ final class NumpadView: UIView {
             inner.setContentCompressionResistancePriority(.required, for: .horizontal)
             inner.setContentCompressionResistancePriority(.required, for: .vertical)
             return container
-
+            
         case .zstack(let children):
             let container = UIView()
             for child in children {
@@ -152,7 +145,7 @@ final class NumpadView: UIView {
                 ])
             }
             return container
-
+            
         case .overlay(let anchor, let child):
             // anchor.x/anchor.y i [0,1]: (0,0)=top-left, (1,1)=bottom-right
             let container = UIView()
@@ -186,6 +179,42 @@ final class NumpadView: UIView {
         
         return b
     }
+    
+    private func makeImageButton(imageName: String, key: NumpadKey, style: KeyboardButtonStyle) -> UIView {
+
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+
+        button.backgroundColor = style.fillColor
+        button.layer.cornerRadius = style.cornerRadius
+        button.layer.masksToBounds = true
+        button.layer.borderWidth = style.borderWidth
+        button.layer.borderColor = style.borderColor.cgColor
+        button.tintColor = style.titleColor
+
+        let image: UIImage?
+        if let sfImage = UIImage(systemName: imageName) {
+            image = sfImage
+        } else {
+            image = UIImage(named: imageName)
+        }
+
+        if let img = image {
+            button.setImage(img.withRenderingMode(.alwaysTemplate), for: .normal)
+        } else {
+            let placeholder = UIImage(systemName: "questionmark.square.dashed")
+            button.setImage(placeholder?.withRenderingMode(.alwaysTemplate), for: .normal)
+        }
+
+        button.imageView?.contentMode = .scaleAspectFit
+        
+        objc_setAssociatedObject(button, &AssociatedKey.payloadKey, Payload(key: key), .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        
+        button.addTarget(self, action: #selector(onTap(_:)), for: .touchUpInside)
+
+        return button
+    }
+    
 
     @objc private func onTap(_ sender: UIButton) {
         if let payload = objc_getAssociatedObject(sender, &AssociatedKey.payloadKey) as? Payload {

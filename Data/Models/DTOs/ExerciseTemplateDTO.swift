@@ -15,6 +15,7 @@ struct ExerciseTemplateDTO: ExerciseChildDTO {
     var order: Int
     var sets: [SetTemplateDTO]
     var settings: ExerciseSettings
+    var notes: [Note]
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.id == rhs.id

@@ -18,6 +18,12 @@ final class ExerciseSession: Equatable, Identifiable {
         }
     }
     
+    @Attribute(.externalStorage) private var notesData: Data
+    var notes: [Note] {
+        get { Note.decodeMany(from: notesData)}
+        set { notesData = Note.encodeMany(newValue)}
+    }
+    
     init (exercise: Exercise, workoutSession: WorkoutSession, order: Int) {
         self.id = UUID()
         self.exercise = exercise
@@ -25,6 +31,7 @@ final class ExerciseSession: Equatable, Identifiable {
         self.order = order
         self.setSessions = []
         self.settingsData = ExerciseSettings.defaultSettings.encoded()
+        self.notesData = Note.encodeMany([])
     }
     
     func toDTO () -> ExerciseSessionDTO {
@@ -35,7 +42,8 @@ final class ExerciseSession: Equatable, Identifiable {
             settings: self.settings,
             sets: self.setSessions.map({
                 $0.toDTO()
-            })
+            }),
+            notes: self.notes
         )
     }
 }

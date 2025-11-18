@@ -40,7 +40,7 @@ enum SetType: String, Codable, CaseIterable, Identifiable, Sendable {
     var fadedColor: Color {
         switch self {
         case .regular:
-            Color(red: 0.937, green: 0.937, blue: 0.937)
+            Color(red: 0.937, green: 0.937, blue: 0.937).opacity(0.2)
         default:
             self.color.opacity(0.2)
         }

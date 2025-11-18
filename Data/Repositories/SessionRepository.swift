@@ -6,13 +6,64 @@ final class SessionRepository {
     private let context: ModelContext
     private var booted: Bool = false
     
+    private var modelById: [UUID: WorkoutSession] = [:]
+    private var dtoById: [UUID: WorkoutSessionDTO] = [:]
+    
+    private var diffSubscribers: [UUID: AsyncStream<EntityDiff<UUID>>.Continuation] = [:]
+    private var pendingSubscribers: [UUID: AsyncStream<EntityDiff<UUID>>.Continuation] = [:]
+    
     init (context: ModelContext) {
         self.context = context
     }
     
-    func persistAndFinishSession (from dto: WorkoutSessionDTO) throws {
-        let endedAt: Date = .now
+    func boot () async throws {
+        guard !booted else { return }
         
+        let all = try context.fetch(FetchDescriptor<WorkoutSession>())
+        modelById = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0 )})
+        dtoById = Dictionary(uniqueKeysWithValues: all.map { ($0.id, toDTO($0) ) })
+        
+        booted = true
+        
+        if !pendingSubscribers.isEmpty {
+            for (k, v) in pendingSubscribers { diffSubscribers[k] = v }
+            pendingSubscribers.removeAll()
+        }
+    }
+    
+    func snapshotDTOs () async -> [WorkoutSessionDTO] {
+        Array(dtoById.values)
+    }
+    
+    func snapshotSortedByEndDate () async -> [WorkoutSessionDTO] {
+        Array(dtoById.values).sorted { (a, b) in
+            let ae = a.endedAt ?? a.startedAt
+            let be = b.endedAt ?? b.startedAt
+            return ae > be
+        }
+    }
+    
+    func streamDiffs () -> AsyncStream<EntityDiff<UUID>> {
+        let token = UUID()
+        return AsyncStream { c in
+            Task { @MainActor in
+                if self.booted {
+                    self.diffSubscribers[token] = c
+                }else {
+                    self.pendingSubscribers[token] = c
+                }
+            }
+            
+            c.onTermination = { _ in
+                Task { @MainActor in
+                    self.diffSubscribers[token] = nil
+                    self.pendingSubscribers[token] = nil
+                }
+            }
+        }
+    }
+    
+    func persistAndFinishSession (from dto: WorkoutSessionDTO) throws {
         let muscleGroupsById = try resolveMuscleGroups(ids: dto.muscleGroupIDs)
         let exercisesById = try resolveExercises(ids: dto.exercises.map(\.exerciseId))
         
@@ -20,7 +71,7 @@ final class SessionRepository {
         workoutSession.name = dto.name
         workoutSession.muscleGroups = dto.muscleGroupIDs.compactMap { muscleGroupsById[$0] }
         workoutSession.startedAt = dto.startedAt
-        workoutSession.endedAt = endedAt
+        workoutSession.endedAt = .now
         
         var exerciseSessions: [ExerciseSession] = []
         exerciseSessions.reserveCapacity(dto.exercises.count)
@@ -56,7 +107,38 @@ final class SessionRepository {
         try context.transaction {
             context.insert(workoutSession)
             try context.save()
+            
+            modelById[workoutSession.id] = workoutSession
+            let newDTO = toDTO(workoutSession)
+            dtoById[workoutSession.id] = newDTO
+            fanout(diff: .init(inserted: [workoutSession.id]))
         }
+    }
+    
+    func fetchDTOs (ids: [UUID]) async throws -> [WorkoutSessionDTO] {
+        guard !ids.isEmpty else { return [] }
+        
+        var result: [WorkoutSessionDTO] = []
+        var missing: [UUID] = []
+        
+        for id in ids {
+            if let dto = dtoById[id] { result.append(dto) }
+            else { missing.append(id)}
+        }
+        
+        if !missing.isEmpty {
+            let fd = FetchDescriptor<WorkoutSession>(predicate: #Predicate { missing.contains($0.id) })
+            let rows = try context.fetch(fd)
+            
+            for m in rows {
+                modelById[m.id] = m
+                let dto = toDTO(m)
+                dtoById[m.id] = dto
+                result.append(dto)
+            }
+        }
+        
+        return result
     }
     
     func lastPerformedExerciseSessionDTO (for exerciseId: UUID) -> ExerciseSessionDTO? {
@@ -73,6 +155,71 @@ final class SessionRepository {
         
         guard let model = try? context.fetch(desc).first else { return nil }
         return model.toDTO()
+    }
+    
+    func delete (id: UUID) throws {
+        try context.transaction {
+            let model: WorkoutSession
+            
+            if let cached = modelById[id] {
+                model = cached
+            }else {
+                let pred = #Predicate<WorkoutSession> { $0.id == id}
+                let fd = FetchDescriptor<WorkoutSession>(predicate: pred)
+                guard let fetched = try context.fetch(fd).first else {
+                    return
+                }
+                
+                model = fetched
+            }
+            
+            context.delete(model)
+            try context.save()
+            
+            modelById[id] = nil
+            dtoById[id] = nil
+            
+            fanout(diff: .init(deleted: [id]))
+        }
+    }
+    
+    private func fanout (diff: EntityDiff<UUID>) {
+        guard booted else { return }
+        for cont in diffSubscribers.values {
+            cont.yield(diff)
+        }
+    }
+    
+    private func toDTO(_ m: WorkoutSession) -> WorkoutSessionDTO {
+        let dto = WorkoutSessionDTO(
+            id: m.id,
+            name: m.name,
+            startedAt: m.startedAt,
+            endedAt: m.endedAt,
+            muscleGroupIDs: m.muscleGroups.map(\.id),
+            exercises: m.exerciseSessions.map {
+                ExerciseSessionDTO(
+                    id: $0.id,
+                    exerciseId: $0.exercise.id,
+                    order: $0.order,
+                    settings: $0.settings,
+                    sets: $0.setSessions.map {
+                        SetSessionDTO(
+                            id: $0.id,
+                            order: $0.order,
+                            weight: $0.weight,
+                            reps: $0.reps,
+                            setType: $0.setType,
+                            performed: $0.performed
+                        )
+                    },
+                    notes: $0.notes
+                )
+            },
+            version: 0
+        )
+        
+        return dto
     }
     
     private func resolveExercises(ids: [UUID]) throws -> [UUID: Exercise] {

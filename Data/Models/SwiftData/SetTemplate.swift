@@ -47,4 +47,16 @@ final class SetTemplate: Equatable, Identifiable {
         self.setType = dto.setType
         self.restTemplateData = dto.restTemplate?.encoded() ?? nil
     }
+    
+    func toDTO () -> SetTemplateDTO {
+        .init(
+            id: self.id,
+            order: self.order,
+            weightTarget: self.weightTarget,
+            minReps: self.minReps,
+            maxReps: self.maxReps,
+            setType: self.setType,
+            restTemplate: self.restTemplate
+        )
+    }
 }

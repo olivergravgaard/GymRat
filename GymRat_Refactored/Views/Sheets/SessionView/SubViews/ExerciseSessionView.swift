@@ -39,7 +39,7 @@ struct ExerciseSessionView: View {
                         cornerRadius: 12,
                         extraBounce: 8,
                         animation: .smooth(duration: 0.3)
-                    ), proxy: proxy) {
+                    ), scrollProxy: .init(proxy: proxy, anchor: .top)) {
                         Image(systemName: "ellipsis")
                             .foregroundStyle(.white)
                             .font(.footnote)
@@ -50,25 +50,10 @@ struct ExerciseSessionView: View {
                             }
                     } menu: { close in
                         EditExerciseChildMenu(
-                            settings: editStore.exerciseChildDTO.settings,
+                            editStore: editStore,
                             standaloneNumpadHost: standaloneNumpadHost,
-                            pageAnimation: .smooth(duration: 0.3)) { (setType, count) in
-                                editStore.addSets(setType: setType, count: count)
-                            } onUpdateRestTimers: { warmup, working in
-                                editStore.updateRestTimers(warmup: warmup, working: working)
-                            } onAddRestTimers: {
-                                withAnimation(.snappy(duration: 0.3)) {
-                                    editStore.addMissingRestSessions()
-                                }
-                                
-                            }
-                            onReplaceExercise: {
+                            pageAnimation: .smooth(duration: 0.3)) {
                                 replaceExercisePayload = .init(exerciseId: editStore.exerciseChildDTO.id)
-                            } onDeleteSelf: {
-                                withAnimation(.snappy(duration: 0.3)) {
-                                    editStore.deleteSelf()
-                                }
-                                editStore.deleteSelf()
                             } close: { onClosed in
                                 close {
                                     onClosed()

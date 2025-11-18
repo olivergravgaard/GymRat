@@ -173,6 +173,14 @@ final class ExerciseSessionEditStore: ExerciseChildEditStore {
         recomputeSetTypeDisplays()
     }
     
+    func addNote(_ text: String) {
+        
+    }
+    
+    func addMissingRest() {
+        
+    }
+    
     func getDefuaultRestSession (for setType: SetType) -> RestSession {
         let isWarmup = setType == .warmup
         return .init(
@@ -292,7 +300,7 @@ final class ExerciseSessionEditStore: ExerciseChildEditStore {
         var final: [UUID] = []
         
         for setSession in setSessions {
-            final.append(contentsOf: setSession.getLocalFieldsORder())
+            final.append(contentsOf: setSession.getLocalFieldsOrder())
         }
         
         return final

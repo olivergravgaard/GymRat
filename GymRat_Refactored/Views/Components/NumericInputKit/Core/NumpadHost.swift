@@ -39,7 +39,7 @@ public final class NumpadHost: ObservableObject, NumpadHosting {
                     .button(title:"4", sends:.digit("4")),
                     .button(title:"5", sends:.digit("5")),
                     .button(title:"6", sends:.digit("6")),
-                    .button(title:"Next", sends:.next)
+                    .button(title:"FART", sends:.next)
                 ]),
                 .hstack(spacing: 8, children: [
                     .button(title:"7", sends:.digit("7")),
@@ -96,6 +96,7 @@ public final class NumpadHost: ObservableObject, NumpadHosting {
     ) {
         if seedValuesForNew {
             for id in ids where values[id] == nil {
+                print("Set to numericValue")
                 values[id] = NumericValue()
             }
         }
@@ -104,16 +105,6 @@ public final class NumpadHost: ObservableObject, NumpadHosting {
         indexOf = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($1, $0) })
 
         if let a = activeId, indexOf[a] == nil {
-            /*if autoInsertActiveIfMissing {
-                order.append(a)
-                indexOf[a] = order.count - 1
-            } else if preserveActive {
-                let newTarget = order.first
-                activeId = nil
-                if let t = newTarget { setActive(t) }
-            } else {
-                setActive(nil)
-            }*/
             setActive(nil)
         }
     }
@@ -224,27 +215,27 @@ public final class NumpadHost: ObservableObject, NumpadHosting {
     
     public func handleKey(_ key: NumpadKey) {
         switch key {
-        case .next:
-            if let id = activeId, let handled = actionsMap[id]?.onNext?(), handled {
+            case .next:
+                if let id = activeId, let handled = actionsMap[id]?.onNext?(), handled {
+                    return
+                }
+                
+                focusNext()
                 return
-            }
-            
-            focusNext()
-            return
-        case .prev:
-            if let id = activeId, let handled = actionsMap[id]?.onPrev?(), handled {
+            case .prev:
+                if let id = activeId, let handled = actionsMap[id]?.onPrev?(), handled {
+                    return
+                }
+                
+                focusPrev()
                 return
-            }
-            
-            focusPrev()
-            return
-        case .done:
-            if let id = activeId, let handled = actionsMap[id]?.onDone?(), handled {
+            case .done:
+                if let id = activeId, let handled = actionsMap[id]?.onDone?(), handled {
+                    return
+                }
+                setActive(nil)
                 return
-            }
-            setActive(nil)
-            return
-        default: break
+            default: break
         }
 
         guard let id = activeId,
@@ -258,12 +249,13 @@ public final class NumpadHost: ObservableObject, NumpadHosting {
         let result = endpoint.inputPolicy.apply(key, to: v)
 
         switch result {
-        case .rejected:
-            return
-        case .updated(let nv):
-            values[id] = nv
-            endpoint.apply(nv)
-            onValueChanged?(id, nv)
+            case .rejected:
+                print("Rejected")
+                return
+            case .updated(let nv):
+                values[id] = nv
+                endpoint.apply(nv)
+                onValueChanged?(id, nv)
         }
     }
 }

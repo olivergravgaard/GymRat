@@ -38,7 +38,6 @@ public actor RestSessionOrchestrator {
 
     private var active: Active?
     private var tickingTask: Task<Void, Never>?
-    // continuations[setId][token] = continuation
     private var continuations: [UUID: [UUID: AsyncStream<RestTick>.Continuation]] = [:]
 
     // MARK: Subscribe
@@ -62,8 +61,29 @@ public actor RestSessionOrchestrator {
     }
 
     public func start(setId: UUID, total: Int, startedAt: Date = Date()) {
+        print(active?.setId)
+        if let a = active, a.setId != setId {
+            if let onFinish = onFinish {
+                let completion = RestCompletion(
+                    setId: a.setId,
+                    total: a.total,
+                    startedAt: a.startedAt,
+                    endedAt: Date()
+                )
+                
+                Task { @MainActor in
+                    onFinish(completion)
+                }
+            }
+        }
+        
         stopCurrent(sendFinal: false)
-        active = Active(setId: setId, total: total, startedAt: startedAt)
+        
+        active = Active(
+            setId: setId,
+            total: max(0, total),
+            startedAt: startedAt
+        )
         tickNow()
         startTicking()
     }
@@ -86,31 +106,127 @@ public actor RestSessionOrchestrator {
         guard active?.setId == setId else { return }
         stopCurrent(sendFinal: sendFinal)
     }
+    
+    public func pause (setId: UUID) -> Int? {
+        guard let a = active, a.setId == setId else { return nil }
+        let rem = remainingSeconds(for: a)
+        stopCurrent(sendFinal: false)
+        
+        broadcast(
+            .init(
+                setId: setId,
+                total: a.total,
+                remaining: rem,
+                isFinished: false
+            )
+        )
+        
+        return rem
+    }
+    
+    public func resumeFromPause (setId: UUID, total: Int, remaining: Int, startedAt: Date = Date()) {
+        guard remaining > 0 else {
+            broadcast(.init(setId: setId, total: 0, remaining: 0, isFinished: true))
+            
+            return
+        }
+        
+        stopCurrent(sendFinal: false)
+        
+        let elapsed = max(0, total - remaining)
+        let syntheticStarted = startedAt.addingTimeInterval(TimeInterval(-elapsed))
+        active = Active(setId: setId, total: total, startedAt: syntheticStarted)
+        
+        tickNow()
+        startTicking()
+    }
 
     public func adjust(by seconds: Int) {
         guard let a = active else { return }
         let newTotal = max(0, a.total + seconds)
         active = .init(setId: a.setId, total: newTotal, startedAt: a.startedAt)
+        
+        let rem = remainingSeconds(for: active!)
+        
+        if rem == 0 {
+            let ended = active!.endsAt
+            
+            broadcast(.init(setId: active!.setId, total: newTotal, remaining: 0, isFinished: true))
+            
+            stopCurrent(sendFinal: false)
+            
+            if let onFinish = onFinish {
+                Task { @MainActor in
+                    onFinish(.init(setId: a.setId, total: newTotal, startedAt: a.startedAt, endedAt: ended))
+                }
+            }
+            
+            return
+        }
+        
         tickNow()
     }
 
     public func activeSetId() -> UUID? { active?.setId }
+    
+    public func restoreIfNeeded (setId: UUID, total: Int, startedAt: Date) {
+        if let a = active, a.setId == setId { return }
+        
+        let now = Date()
+        let elapsed = Int(now.timeIntervalSince(startedAt))
+        
+        if elapsed >= total {
+            if let onFinish = onFinish {
+                let completion = RestCompletion(
+                    setId: setId,
+                    total: total,
+                    startedAt: startedAt,
+                    endedAt: startedAt.addingTimeInterval(TimeInterval(total))
+                )
+                
+                Task { @MainActor in
+                    onFinish(completion)
+                }
+            }
+            
+            return
+        }
+        
+        active = Active(
+            setId: setId,
+            total: total,
+            startedAt: startedAt
+        )
+        tickNow()
+        startTicking()
+    }
 
     // MARK: intern ticking
     private func startTicking() {
         tickingTask = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                try? await Task.sleep(for: .milliseconds(1000))
                 guard let a = await self.active else { break }
                 let rem = await self.remainingSeconds(for: a)
                 await self.broadcast(.init(setId: a.setId, total: a.total, remaining: rem, isFinished: rem == 0))
+                
                 if rem == 0 {
                     let ended = a.endsAt
                     await self.stopCurrent(sendFinal: false)
                     if let onFinish = self.onFinish {
-                        await MainActor.run { onFinish(.init(setId: a.setId, total: a.total, startedAt: a.startedAt, endedAt: ended)) }
+                        let completion = RestCompletion(
+                            setId: a.setId,
+                            total: a.total,
+                            startedAt: a.startedAt,
+                            endedAt: ended
+                        )
+                        
+                        await MainActor.run {
+                            onFinish(completion)
+                        }
                     }
+                    
                     break
                 }
             }
@@ -124,7 +240,14 @@ public actor RestSessionOrchestrator {
     private func tickNow() {
         guard let a = active else { return }
         let rem = remainingSeconds(for: a)
-        broadcast(.init(setId: a.setId, total: a.total, remaining: rem, isFinished: rem == 0))
+        broadcast(
+            .init(
+                setId: a.setId,
+                total: a.total,
+                remaining: rem,
+                isFinished: rem == 0
+            )
+        )
     }
 
     private func broadcast(_ tick: RestTick) {
@@ -133,6 +256,9 @@ public actor RestSessionOrchestrator {
 
     private func removeContinuation(setId: UUID, token: UUID) {
         continuations[setId]?[token] = nil
-        if continuations[setId]?.isEmpty == true { continuations.removeValue(forKey: setId) }
+        
+        if continuations[setId]?.isEmpty == true {
+            continuations.removeValue(forKey: setId)
+        }
     }
 }

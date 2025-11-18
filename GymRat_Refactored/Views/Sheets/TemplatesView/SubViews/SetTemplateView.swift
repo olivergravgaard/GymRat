@@ -242,7 +242,8 @@ struct SetTemplateView: View {
                         }
                     }
                 }
-            ), occupiesFullWidth: true
+            ),
+            occupiesFullWidth: true
         )
     }
     

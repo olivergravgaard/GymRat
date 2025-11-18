@@ -47,7 +47,8 @@ nonisolated struct WorkoutSessionDTO: Equatable, Identifiable, Sendable, Codable
                                 )
                             )
                         )
-                    }
+                    },
+                    notes: $0.notes.sorted(by: { $0.order < $1.order })
                 )
             }
         
@@ -62,12 +63,19 @@ nonisolated struct WorkoutSessionDTO: Equatable, Identifiable, Sendable, Codable
         )
     }
     
-    func totalSetsCount() -> Int {
-        self.exercises.reduce(0) { $0 + $1.sets.count }
+    var totalSetsCount: Int {
+        self.exercises.reduce(0) {
+            $0 + $1.sets.count
+        }
     }
 
-    func performedSetsCount() -> Int {
+    var performedSetsCount: Int {
         self.exercises.flatMap(\.sets).reduce(into: 0) { $0 += ($1.performed == true) ? 1 : 0 }
+    }
+    
+    var duration: Int {
+        guard let endedAt = endedAt else { return 0 }
+        return max(0, Int(endedAt.timeIntervalSince(startedAt)))
     }
 }
 

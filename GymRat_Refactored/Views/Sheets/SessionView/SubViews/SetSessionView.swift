@@ -71,7 +71,7 @@ struct SetSessionView: View {
                             .foregroundStyle(editStore.setTypeColor)
                             .frame(width: 44, height: 32, alignment: .center)
                             .background {
-                                RoundedRectangle(cornerRadius: 12).fill(.white)
+                                RoundedRectangle(cornerRadius: 12).fill(editStore.setDTO.setType.fadedColor)
                             }
                     } menu: { close in
                         EditSetTypeView { setType in
@@ -99,7 +99,7 @@ struct SetSessionView: View {
                         textColor: .black,
                         selectionColor: .black,
                         caretColor: .black,
-                        insets: .init(top: 0, left: 0, bottom: 4, right: 4),
+                        insets: .init(top: 0, left: 4, bottom: 0, right: 4),
                         alignment: .center,
                         placeholderText: "0.0",
                         placeholderColor: UIColor.black.withAlphaComponent(0.2)
@@ -108,6 +108,10 @@ struct SetSessionView: View {
                 )
                 .frame(maxWidth: .infinity, alignment: .center)
                 .frame(height: 32, alignment: .center)
+                .background {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(editStore.setDTO.setType.fadedColor)
+                }
                 .onChange(of: weightText) { oldValue, newValue in
                     commitWeight()
                 }
@@ -121,12 +125,10 @@ struct SetSessionView: View {
                         textColor: .black,
                         selectionColor: .black,
                         caretColor: .black,
-                        insets: .init(top: 0, left: 0, bottom: 4, right: 4),
+                        insets: .init(top: 0, left: 4, bottom: 0, right: 4),
                         alignment: .center,
                         actions: .init(onNext: {
                             editStore.markPerformed()
-                            
-                            editStore.startRest()
                             return false
                         }),
                         placeholderText: "0",
@@ -135,6 +137,10 @@ struct SetSessionView: View {
                     text: $repsText
                 )
                 .frame(width: 55, height: 32, alignment: .center)
+                .background {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(editStore.setDTO.setType.fadedColor)
+                }
                 .onChange(of: repsText) { oldValue, newValue in
                     commitReps()
                 }
@@ -146,26 +152,24 @@ struct SetSessionView: View {
                         editStore.markPerformed()
                         commitWeight()
                         commitReps()
-                        editStore.startRest()
                     }
                 } label: {
                     Image(systemName: "checkmark")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .font(.footnote)
-                        .fontWeight(.medium)
-                        .foregroundStyle(editStore.setDTO.performed ? .white : .gray)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.white)
                         .padding(.vertical, 10)
                         .frame(width: 44, height: 32, alignment: .center)
                         .background {
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(editStore.setDTO.performed ? .green : .white)
+                                .fill(editStore.setDTO.performed ? editStore.setDTO.setType.color : editStore.setDTO.setType.fadedColor)
                         }
                 }
                 
             }
             .onReceive(editStore.weightAndRestChangeExternal, perform: { (weight, reps) in
-                print("Received")
                 guard let weight = weight, let reps = reps else { return }
                 weightText = formatWeight(weight)
                 repsText = String(reps)
@@ -174,184 +178,215 @@ struct SetSessionView: View {
             .padding(.horizontal, 6)
             .background {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(editStore.setDTO.performed ? .green.opacity(0.1) : .clear)
+                    .fill(editStore.setDTO.performed ? editStore.setDTO.setType.fadedColor : .clear)
             }
-            .swipeActions(
-                config: .init(
-                    leadingPadding: 8,
-                    trailingPadding: 8,
-                    spacing: 8,
-                    occupiesFullWidth: false
-                )) {
-                    SwipeAction(
-                        symbolImage: "trash",
-                        tint: .red,
-                        background: .red.opacity(0.1),
-                        font: .caption,
-                        size: .init(width: 44, height: 44)) { close in
-                            close {
-                                withAnimation(.snappy(duration: 0.3)) {
-                                    editStore.removeSelf()
-                                } completion: {
-                                    Task {
-                                        numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
-                                    }
-                                }
-                            }
-                        }
-                    
-                    SwipeAction(
-                        symbolImage: "timer",
-                        tint: .green,
-                        background: .green.opacity(0.1),
-                        font: .caption,
-                        size: .init(width: 44, height: 44)) { close in
-                            close {
-                                withAnimation (.snappy(duration: 0.3)) {
-                                    editStore.addRestSession()
-                                }
-                            }
-                        }
-                }
-                .onReceive(editStore.restDidChangeExternal, perform: { seconds in
-                    let formatted = formatRest(seconds)
-                    restText = formatted
-                })
+            .onReceive(editStore.restDidChangeExternal, perform: { seconds in
+                let formatted = formatRest(seconds)
+                restText = formatted
+            })
             
             if editStore.hasRest {
-                let active = editStore.restTick?.isFinished == false
-                
-                if active {
-                    Text(formatRest(editStore.restTick?.remaining))
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .frame(height: 24)
-                        .background {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(.indigo.opacity(0.1))
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 24)
-                                
-                                GeometryReader { geo in
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(.indigo)
-                                        .frame(width: geo.size.width * (1 - (editStore.restTick?.progress ?? 0)), height: geo.size.height)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
+                Group {
+                    if isRestActive {
+                        Text(formatRest(editStore.restTick?.remaining))
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, alignment: .center)
                             .frame(height: 24)
-                            
-                        }
-                        .swipeActions(
-                            config: .init(
-                                leadingPadding: 8,
-                                trailingPadding: 8,
-                                spacing: 8,
-                                occupiesFullWidth: false
-                            ), progress: $restSwipeProgress) {
-                                SwipeAction(
-                                    symbolImage: "trash",
-                                    tint: .red,
-                                    background: .red.opacity(0.1),
-                                    font: .caption,
-                                    size: .init(width: 24, height: 24)) { close in
-                                        close{
-                                            withAnimation(.snappy(duration: 0.3)) {
-                                                editStore.removeRestSession()
-                                            } completion: {
-                                                Task {
-                                                    numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
-                                                }
-                                            }
-                                        }
+                            .background {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(editStore.setDTO.setType.fadedColor)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 24)
+                                    
+                                    GeometryReader { geo in
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(editStore.setDTO.setType.color)
+                                            .frame(width: geo.size.width * activeRestRemainingFraction, height: geo.size.height)
                                     }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 24)
+                                
+                            }
+                            .onTapGesture {
+                                numpadHost.setActive(editStore.activeRestFieldId)
                             }
                         
-                }else {
-                    FieldRow(
-                        id: editStore.restFieldId,
-                        host: numpadHost,
-                        inputPolicy: InputPolicies.time(limit: .hours, allowedNegative: false),
-                        config: .init(
-                            font: .systemFont(ofSize: 12, weight: .semibold),
-                            textColor: .white,
-                            selectionColor: .white,
-                            caretColor: .white,
-                            insets: .init(top: 0, left: 0, bottom: 4, right: 4),
-                            alignment: .center,
-                            actions: .init(
-                                onNext: {
-                                    withAnimation {
-                                        editStore.stopRest()
-                                    }
-                                    return false
-                                },
-                                onBecomeActive: {
-                                    withAnimation {
-                                        DispatchQueue.main.async {
-                                            restActive = true
+                        FieldRow(
+                            id: editStore.activeRestFieldId,
+                            host: numpadHost,
+                            inputPolicy: InputPolicies.restControl(addSeconds: 5, decSeconds: 5, onAdd: { _ in
+                                editStore.adjustActiveRest(by: 5)
+                            }, onDec: { _ in
+                                editStore.adjustActiveRest(by: -5)
+                            }, onPause: {
+                                editStore.togglePauseRest()
+                            }, onReset: {
+                                editStore.resetRest()
+                            }, onSkip: {
+                                numpadHost.focusNext()
+                                editStore.skipRest()
+                            }),
+                            config: .init(),
+                            text: .constant("")
+                        )
+                        .frame(width: 0, height: 0)
+                        .clipped()
+                        .allowsTightening(false)
+                        
+                    }else {
+                        FieldRow(
+                            id: editStore.restFieldId,
+                            host: numpadHost,
+                            inputPolicy: InputPolicies.time(limit: .hours, allowedNegative: false),
+                            config: .init(
+                                font: .systemFont(ofSize: 12, weight: .semibold),
+                                textColor: UIColor(editStore.restComplete ? .white : editStore.setDTO.setType.color),
+                                selectionColor: .white,
+                                caretColor: .white,
+                                insets: .init(top: 0, left: 4, bottom: 0, right: 4),
+                                alignment: .center,
+                                actions: .init(
+                                    onNext: {
+                                        withAnimation {
+                                            editStore.stopRest()
                                         }
+                                        return false
+                                    },
+                                    onBecomeActive: {
+                                        withAnimation {
+                                            DispatchQueue.main.async {
+                                                restActive = true
+                                            }
+                                        }
+                                        
+                                        return false
+                                    }, onResignActive: {
+                                        
+                                        withAnimation {
+                                            restActive = false
+                                        }
+                                        
+                                        return false
                                     }
-                                    
-                                    return false
-                                }, onResignActive: {
-                                    
-                                    withAnimation {
-                                        restActive = false
-                                    }
-                                    
-                                    return false
-                                }
+                                ),
+                                placeholderText: "-",
+                                placeholderColor: UIColor.white.withAlphaComponent(0.8),
                             ),
-                            placeholderText: "-",
-                            placeholderColor: UIColor.white.withAlphaComponent(0.8),
-                        ),
-                        text: $restText
-                    )
-                    .transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .frame(height: restActive ? 24 : 14 + (10 * restSwipeProgress), alignment: .center)
-                    .background {
-                        RoundedRectangle(cornerRadius: 12).fill(.indigo)
+                            text: $restText
+                        )
+                        .transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .frame(height: restActive ? 24 : 14 + (10 * restSwipeProgress), alignment: .center)
+                        .background {
+                            RoundedRectangle(cornerRadius: 12).fill(editStore.restComplete ? editStore.setDTO.setType.color : editStore.setDTO.setType.fadedColor)
+                        }
+                        .onChange(of: restText, { _, _ in
+                            commitRest()
+                        })
                     }
-                    .onAppear(perform: {
+                }
+                .onChange(of: editStore.setDTO.restSession?.restState, { oldValue, newValue in
+                    if (oldValue == .running || oldValue == .paused) && (newValue == .idle || newValue == .completed) {
                         Task {
                             numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
                         }
-                    })
-                    .onChange(of: restText, { _, _ in
-                        commitRest()
-                    })
-                    .swipeActions(
-                        config: .init(
-                            leadingPadding: 8,
-                            trailingPadding: 8,
-                            spacing: 8,
-                            occupiesFullWidth: false
-                        ), progress: $restSwipeProgress) {
-                            SwipeAction(
-                                symbolImage: "trash",
-                                tint: .red,
-                                background: .red.opacity(0.1),
-                                font: .caption,
-                                size: .init(width: 24, height: 24)) { close in
-                                    close{
-                                        withAnimation(.snappy(duration: 0.3)) {
-                                            editStore.removeRestSession()
-                                        } completion: {
-                                            Task {
-                                                numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
-                                            }
-                                        }
-                                    }
-                                }
+                    }else if (oldValue == .idle || oldValue == .completed) && (newValue == .running || newValue == .paused) {
+                        Task {
+                            numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
+                            numpadHost.setActive(editStore.activeRestFieldId)
                         }
-                }
+                    }
+                    
+                    return
+                })
+                .swipeToTrigger(
+                    leftSwipeConfig: .init(
+                        direction: .left,
+                        isDeletion: true,
+                        threshold: 0.6,
+                        backgroundColor: .red.opacity(0.2),
+                        actionView: {
+                            Image(systemName: "trash")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.red)
+                                .padding(.horizontal)
+                        },
+                        onTrigger: {
+                            withAnimation(.snappy(duration: 0.3)) {
+                                editStore.removeRestSession()
+                            } completion: {
+                                Task {
+                                    numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
+                                }
+                            }
+                        }
+                    ),
+                    rightSwipeConfig: nil,
+                    occupiesFullWidth: true
+                )
             }
         }
+        .swipeToTrigger(
+            leftSwipeConfig: .init(
+                direction: .left,
+                isDeletion: true,
+                threshold: 0.6,
+                backgroundColor: .red.opacity(0.2),
+                actionView: {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal)
+                },
+                onTrigger: {
+                    withAnimation(.snappy(duration: 0.3)) {
+                        editStore.removeSelf()
+                    } completion: {
+                        Task {
+                            numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
+                        }
+                    }
+                }
+            ),
+            rightSwipeConfig: .init(
+                direction: .right,
+                isDeletion: false,
+                threshold: 0.4,
+                backgroundColor: .green.opacity(0.2),
+                actionView: {
+                    Image(systemName: "timer")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.green)
+                        .padding(.horizontal)
+                },
+                onTrigger: {
+                    withAnimation(.snappy(duration: 0.3)) {
+                        editStore.addRestSession()
+                    } completion: {
+                        Task {
+                            numpadHost.setOrder(await editStore.getGlobalFieldsOrder())
+                        }
+                    }
+                }
+            ),
+            occupiesFullWidth: true
+        )
+    }
+    
+    var isRestActive: Bool {
+        return editStore.setDTO.restSession?.restState == .running || editStore.setDTO.restSession?.restState == .paused
+    }
+    
+    private var activeRestRemainingFraction: Double {
+        let remaining = max(0, min(editStore.restTick?.remaining ?? 0, editStore.setDTO.restSession?.duration ?? 1))
+        return Double(remaining) / Double(editStore.setDTO.restSession?.duration ?? remaining)
     }
     
     private func commitWeight () {

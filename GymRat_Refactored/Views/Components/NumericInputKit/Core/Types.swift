@@ -49,6 +49,7 @@ public enum NumpadKey: Equatable, Sendable {
     case next
     case prev
     case done
+    case custom(String)
 }
 
 public enum EditResult: Sendable, Equatable {
@@ -94,14 +95,58 @@ public struct KeyboardButtonStyle: Equatable {
 }
 
 public indirect enum KeyboardNode: Equatable {
+    // Stacks
     case vstack(spacing: CGFloat, children: [KeyboardNode])
     case hstack(spacing: CGFloat, children: [KeyboardNode])
     case zstack(children: [KeyboardNode])
-    case box(padding: UIEdgeInsets, child: KeyboardNode)
-    case grid(columns: Int, rowSpacing: CGFloat, colSpacing: CGFloat, items: [KeyboardNode])
+    case frame(width: CGFloat?, height: CGFloat?, child: KeyboardNode)
     case spacer(flex: Int)
     case aspectRatio(_ ratio: CGFloat, child: KeyboardNode)
     case overlay(alignment: CGPoint, child: KeyboardNode)
     case button(title: String, sends: NumpadKey, style: KeyboardButtonStyle = .init())
+    case imageButton(imageName: String, sends: NumpadKey, style: KeyboardButtonStyle)
     case empty
+}
+
+public struct KFrame: Equatable {
+    public var width: CGFloat?
+    public var height: CGFloat?
+    public var flex: Int?
+    public init(width: CGFloat? = nil, height: CGFloat? = nil, flex: Int? = nil) {
+        self.width = width
+        self.height = height
+        self.flex = flex
+    }
+}
+
+public enum KAlignment: Equatable {
+    case leading, trailing, top, bottom, center, fill
+}
+
+public enum KDistribution: Equatable {
+    case fill, equalSpacing, equalCentering, equalSize
+}
+
+
+
+public struct KStackStyle: Equatable {
+    public var spacing: CGFloat
+    public var alignment: KAlignment
+    public var distribution: KDistribution
+    public var padding: UIEdgeInsets
+    public var frame: KFrame?
+    
+    public init(
+        spacing: CGFloat = 0,
+        alignment: KAlignment = .center,
+        distribution: KDistribution = .fill,
+        padding: UIEdgeInsets = .zero,
+        frame: KFrame? = nil
+    ) {
+        self.spacing = spacing
+        self.alignment = alignment
+        self.distribution = distribution
+        self.padding = padding
+        self.frame = frame
+    }
 }

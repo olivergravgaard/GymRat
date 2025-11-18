@@ -9,14 +9,10 @@ struct EditExerciseChildMenu: View {
         case updateRestTimers
     }
     
-    let settings: ExerciseSettings
+    let editStore: any ExerciseChildEditStore
     let standaloneNumpadHost: FocusOnlyHost
     let pageAnimation: Animation
-    let onAddSets: (_ setType: SetType, _ count: Int) -> Void
-    let onUpdateRestTimers: (_ warmup: Int?, _ working: Int?) -> Void
-    let onAddRestTimers: () -> Void
     let onReplaceExercise: () -> Void
-    let onDeleteSelf: () -> Void
     let close: (@escaping () -> Void) -> Void
     
     
@@ -30,34 +26,26 @@ struct EditExerciseChildMenu: View {
     @State private var warmupRestTimerFieldId: UUID = UUID()
     @State private var warmupRestTimerText: String = ""
     var initialWarmupRestTimerText: String {
-        return formatRest(settings.warmupRestDuration)
+        return formatRest(editStore.exerciseChildDTO.settings.warmupRestDuration)
     }
     
     @State private var workingRestTimerFieldId: UUID = UUID()
     @State private var workingRestTimerText: String = ""
     var initalWorkingRestTimerText: String {
-        return formatRest(settings.setRestDuration)
+        return formatRest(editStore.exerciseChildDTO.settings.setRestDuration)
     }
     
     init(
-        settings: ExerciseSettings,
+        editStore: any ExerciseChildEditStore,
         standaloneNumpadHost: FocusOnlyHost,
         pageAnimation: Animation,
-        onAddSets: @escaping (_ setType: SetType, _ count: Int) -> Void,
-        onUpdateRestTimers: @escaping (_ warmup: Int?, _ working: Int?) -> Void,
-        onAddRestTimers: @escaping () -> Void,
         onReplaceExercise: @escaping () -> Void,
-        onDeleteSelf:  @escaping () -> Void,
         close: @escaping (@escaping () -> Void) -> Void,
     ) {
-        self.settings = settings
+        self.editStore = editStore
         self.standaloneNumpadHost = standaloneNumpadHost
         self.pageAnimation = pageAnimation
-        self.onAddSets = onAddSets
-        self.onUpdateRestTimers = onUpdateRestTimers
-        self.onAddRestTimers = onAddRestTimers
         self.onReplaceExercise = onReplaceExercise
-        self.onDeleteSelf = onDeleteSelf
         self.close = close
         
         self._warmupRestTimerText = State(initialValue: initialWarmupRestTimerText)
@@ -91,7 +79,7 @@ struct EditExerciseChildMenu: View {
         VStack (spacing: 0) {
             labelView(title: "Add note", image: "note") {
                 close {
-
+                    editStore.addNote("")
                 }
             }
             
@@ -105,7 +93,7 @@ struct EditExerciseChildMenu: View {
             
             labelView(title: "Add rest timers", image: "text.badge.plus") {
                 close {
-                    onAddRestTimers()
+                    editStore.addMissingRest()
                 }
             }
             
@@ -117,7 +105,7 @@ struct EditExerciseChildMenu: View {
             
             Button {
                 close {
-                    onDeleteSelf()
+                    editStore.deleteSelf()
                 }
             } label: {
                 Image(systemName: "trash")
@@ -200,7 +188,7 @@ struct EditExerciseChildMenu: View {
             
             Button {
                 close {
-                    onUpdateRestTimers(parseNormalizedRest(warmupRestTimerText), parseNormalizedRest(workingRestTimerText))
+                    editStore.updateRestTimers(warmup: parseNormalizedRest(warmupRestTimerText), working: parseNormalizedRest(workingRestTimerText))
                 }
             } label: {
                 Text("Update")
@@ -326,7 +314,8 @@ struct EditExerciseChildMenu: View {
             Button {
                 close {
                     guard let count = parse(addSetsCountText) else { return }
-                    onAddSets(addSetsSetType, count)
+                    
+                    editStore.addSets(setType: addSetsSetType, count: count)
                 }
             } label: {
                 Text("Add")

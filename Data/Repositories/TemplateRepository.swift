@@ -128,6 +128,7 @@ final class TemplateRepository {
                 et.exercise = ex
             }
             et.settings = etDTO.settings
+            et.notes = etDTO.notes
 
             let currentSTById = Dictionary(uniqueKeysWithValues: et.setTemplates.map { ($0.id, $0) })
             let desiredSTIDs  = Set(etDTO.sets.map(\.id))
@@ -291,7 +292,8 @@ final class TemplateRepository {
                             restTemplate: $0.restTemplate
                         )
                     },
-                    settings: $0.settings
+                    settings: $0.settings,
+                    notes: $0.notes
                 )
             }
         )

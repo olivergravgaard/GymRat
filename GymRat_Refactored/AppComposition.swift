@@ -22,6 +22,7 @@ final class AppComposition: ObservableObject {
     let muscleGroupProvider: MuscleGroupProvider
     let exerciseProvider: ExerciseProvider
     let templateProvider: TemplateProvider
+    let sessionProvider: SessionProvider
     let sessionDraftStore: SessionDraftStore
     let sessionStarter: SessionStarter
     
@@ -64,6 +65,7 @@ final class AppComposition: ObservableObject {
         self.muscleGroupProvider = MuscleGroupProvider(repo: muscleGroupRepository)
         self.exerciseProvider = ExerciseProvider(repo: exerciseRepository)
         self.templateProvider = TemplateProvider(repo: templateRepository)
+        self.sessionProvider = SessionProvider(repo: sessionRepository)
         
         
         let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent("ActiveWorkout.json")
@@ -101,6 +103,8 @@ final class AppComposition: ObservableObject {
             
             // Session
             _ = await self.sessionDraftStore.load()
+            try await sessionRepository.boot()
+            await sessionProvider.boot()
             
             bootState = .ready
         }catch {
@@ -188,7 +192,8 @@ final class AppComposition: ObservableObject {
                     exerciseId: ex.id,
                     order: idx,
                     sets: setTemplates,
-                    settings: ExerciseSettings.defaultSettings
+                    settings: ExerciseSettings.defaultSettings,
+                    notes: []
                 )
             }
             

@@ -63,7 +63,7 @@ struct RootView: View {
             }
             
             Tab.init(value: .profile) {
-                ProfileView()
+                ProfileView(sessionProvider: comp.sessionProvider)
                     .toolbarVisibility(.hidden, for: .tabBar)
             }
         }
@@ -128,16 +128,19 @@ struct RootView: View {
                     ZStack {
                         ForEach(TabItem.allCases, id: \.rawValue) { tabItem in
                             Image(systemName: tabItem.actionSymbol)
-                                .font(.system(size: 22, weight: .medium))
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 22)
                                 .foregroundStyle(.indigo)
                                 .blurFade(activeTabItem == tabItem)
                         }
                     }
                     .frame(width: 55, height: 55)
+                    .compositingGroup()
+                    .glassEffect(.regular.interactive(), in: .circle)
                     .opacity(tabActions.hasAction(for: activeTabItem) ? 1 : 0)
                 }
                 .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .capsule)
                 .animation(.smooth(duration: 0.55, extraBounce: 0), value: activeTabItem)
             }
         }

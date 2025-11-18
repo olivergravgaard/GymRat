@@ -24,7 +24,7 @@ struct WorkoutTemplateCardView: View {
                 extraBounce: 0,
                 animation: .smooth(duration: 0.5)
             ),
-            proxy: proxy
+            scrollProxy: .init(proxy: proxy, anchor: .top)
         ) {
             VStack(spacing: 16) {
                 HStack(spacing: 12) {
@@ -84,42 +84,12 @@ struct WorkoutTemplateCardView: View {
             .cornerRadius(12)
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(.black.opacity(0.01)))
             .shadow(color: .black.opacity(0.06), radius: 10, y: 6)
-            .swipeActions(
-                config: .init(
-                    leadingPadding: 0,
-                    trailingPadding: 16,
-                    spacing: 16,
-                    occupiesFullWidth: true
-                ),
-                progress: $swipeProgress) {
-                    SwipeAction(
-                        symbolImage: "trash",
-                        tint: .red,
-                        background: .red.opacity(0.2),
-                        size: CGSize(width: 55, height: 55),
-                    ) { close in
-                            close {
-                                print("Something")
-                            }
-                        }
-                    
-                    SwipeAction(
-                        symbolImage: "chevron.right",
-                        tint: .green,
-                        background: .green.opacity(0.2),
-                        size: CGSize(width: 55, height: 55),
-                    ) { close in
-                            close {
-                                print("Starting")
-                            }
-                        }
-                }
         } menu: { close in
             ScrollView(.vertical, showsIndicators: false) {
                 VStack (spacing: 8) {
                     ForEach(workoutTemplate.exerciseTemplates, id: \.id) { exerciseTemplate in
                         HStack(alignment: .center, spacing: 6) {
-                            Text("3 x \(appComp.exerciseLookupSource.name(for: exerciseTemplate.exerciseId))")
+                            Text("\(exerciseTemplate.sets.count) x \(appComp.exerciseLookupSource.name(for: exerciseTemplate.exerciseId))")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .foregroundColor(.primary)
@@ -137,7 +107,7 @@ struct WorkoutTemplateCardView: View {
                 .padding(.horizontal, 32)
             }
             .safeAreaInset(edge: .top) {
-                VStack (alignment: .leading, spacing: 16) {
+                VStack (alignment: .leading, spacing: 8) {
                     HStack (alignment: .center) {
                         Text(workoutTemplate.name)
                             .font(.title)
@@ -171,10 +141,7 @@ struct WorkoutTemplateCardView: View {
                     }
                 }
                 .padding()
-                .background {
-                    UnevenRoundedRectangle(cornerRadii: .init(bottomLeading: 12, bottomTrailing: 12))
-                        .fill(Color(red: 0.937, green: 0.937, blue: 0.937))
-                }
+                .fadedBackground(direction: .topToBottom, ignoreEdgeSet: [], fadeStart: 0.8)
             }
             .safeAreaInset(edge: .bottom) {
                 HStack (spacing: 8) {
@@ -213,14 +180,11 @@ struct WorkoutTemplateCardView: View {
                     }
                 }
                 .padding()
-                .background {
-                    UnevenRoundedRectangle(cornerRadii: .init(topLeading: 12, topTrailing: 12))
-                        .fill(Color(red: 0.937, green: 0.937, blue: 0.937))
-                }
+                .fadedBackground(direction: .bottomToTop, ignoreEdgeSet: [], fadeStart: 0.8)
 
             }
             .frame(width: UIScreen.size.width - 32)
-            .frame(maxHeight: UIScreen.size.height - 32)
+            .frame(maxHeight: UIScreen.size.height / 2)
         }
     }
 }

@@ -9,12 +9,17 @@ struct MorphMenuConfig {
     var backgroundTapable: Bool = true
 }
 
+struct ScrollProxyConfig {
+    var proxy: ScrollViewProxy
+    var anchor: UnitPoint
+}
+
 struct MorphMenuView<Label: View, Menu: View, Host: NumpadHosting>: View {
     
     // Arguments
     let numpadHost: Host
     let config: MorphMenuConfig
-    let proxy: ScrollViewProxy?
+    let scrollProxy: ScrollProxyConfig?
     let label: () -> Label
     let menu: (_ close: @escaping (_ onClosed: @escaping () -> ()) -> ()) -> Menu
     var onOpen: () -> ()
@@ -28,14 +33,14 @@ struct MorphMenuView<Label: View, Menu: View, Host: NumpadHosting>: View {
     init (
         numpadHost: Host,
         config: MorphMenuConfig,
-        proxy: ScrollViewProxy? = nil,
+        scrollProxy: ScrollProxyConfig? = nil,
         @ViewBuilder label: @escaping () -> Label,
         @ViewBuilder menu: @escaping (_ close: @escaping (_ onClosed: @escaping () -> ()) -> ()) -> Menu,
         onOpen: @escaping () -> () = {}
     ) {
         self.numpadHost = numpadHost
         self.config = config
-        self.proxy = proxy
+        self.scrollProxy = scrollProxy
         self.label = label
         self.menu = menu
         self.onOpen = onOpen
@@ -43,9 +48,9 @@ struct MorphMenuView<Label: View, Menu: View, Host: NumpadHosting>: View {
     
     var body: some View {
         Button {
-            if let proxy = proxy {
+            if let scrollProxy = scrollProxy {
                 withAnimation(.snappy(duration: 0.5), completionCriteria: .logicallyComplete) {
-                    proxy.scrollTo(id, anchor: .top)
+                    scrollProxy.proxy.scrollTo(id, anchor: scrollProxy.anchor)
                 } completion: {
                     open()
                 }
@@ -284,11 +289,11 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
         let screenHeight = UIScreen.size.height
         
         var overlapsMinY: Bool {
-            labelRect.maxY - contentSize.height <= 0
+            labelRect.maxY - contentSize.height <= UIScreen.safeAreaInsets.top
         }
         
         var overlapsMaxY: Bool {
-            labelRect.minY + contentSize.height >= screenHeight
+            labelRect.minY + contentSize.height >= screenHeight - UIScreen.safeAreaInsets.bottom
         }
         
         var overlapsMinX: Bool {
@@ -354,7 +359,11 @@ struct MorphMenuModifier<Label: View, Popup: View, Host: NumpadHosting>: ViewMod
                 }
             case .top:
                 if overlapsMaxY {
-                    return .bottom
+                    if overlapsMinY {
+                        return .center
+                    }else {
+                        return .bottom
+                    }
                 }
                 
                 return alignment

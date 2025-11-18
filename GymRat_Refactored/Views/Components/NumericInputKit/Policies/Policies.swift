@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 public struct _DigitsOnlyPolicy: InputPolicy {
     
@@ -12,30 +13,32 @@ public struct _DigitsOnlyPolicy: InputPolicy {
 
     public func apply(_ key: NumpadKey, to v: NumericValue) -> EditResult {
         switch key {
-        case .digit(let ch):
-            guard ch.isNumber else { return .rejected }
-            return insertDigit(ch, v)
+            case .digit(let ch):
+                guard ch.isNumber else { return .rejected }
+                return insertDigit(ch, v)
 
-        case .minus:
-            guard allowNegative else { return .rejected }
-            return toggleMinus(v)
+            case .minus:
+                guard allowNegative else { return .rejected }
+                return toggleMinus(v)
 
-        case .decimal:
-            return .rejected
+            case .decimal:
+                return .rejected
 
-        case .backspace:
-            return .updated(backspace(v))
-        case .deleteForward:
-            return .updated(deleteForward(v))
-        case .clear:
-            return .updated(NumericValue(text: "", caret: 0, selection: nil))
-        case .selectAll:
-            var t = v; let n = t.text.utf16Count
-            t.selection = n > 0 ? 0..<n : nil
-            t.caret = n
-            return .updated(t)
-        case .next, .prev, .done:
-            return .updated(v)
+            case .backspace:
+                return .updated(backspace(v))
+            case .deleteForward:
+                return .updated(deleteForward(v))
+            case .clear:
+                return .updated(NumericValue(text: "", caret: 0, selection: nil))
+            case .selectAll:
+                var t = v; let n = t.text.utf16Count
+                t.selection = n > 0 ? 0..<n : nil
+                t.caret = n
+                return .updated(t)
+            case .next, .prev, .done:
+                return .updated(v)
+            case .custom(_:):
+                return .rejected
         }
     }
 
@@ -181,6 +184,8 @@ public struct _DecimalPolicy: InputPolicy {
 
         case .next, .prev, .done:
             return .updated(v)
+        case .custom(_:):
+            return .rejected
         }
     }
 
@@ -428,7 +433,6 @@ extension _DecimalPolicy: KeyboardTreeProviding {
         let style = KeyboardButtonStyle()
         let navPrev: KeyboardNode = hostSupportsNavigation ? .button(title: "Prev", sends: .prev, style: style) : .spacer(flex: 1)
         let navNext: KeyboardNode = hostSupportsNavigation ? .button(title: "Next", sends: .next, style: style) : .spacer(flex: 1)
-        let minus: KeyboardNode = allowNegative ? .button(title: "−", sends: .minus, style: style) : .spacer(flex: 1)
         let dotTitle = String(decimalSeparator)
 
         return .vstack(spacing: 8, children: [
@@ -453,7 +457,7 @@ extension _DecimalPolicy: KeyboardTreeProviding {
             .hstack(spacing: 8, children: [
                 .button(title: dotTitle, sends: .decimal, style: style),
                 .button(title: "0", sends: .digit("0"), style: style),
-                minus,
+                .button(title: "Clear", sends: .clear, style: style),
                 .button(title: "Done", sends: .done, style: style),
             ])
         ])
@@ -506,7 +510,9 @@ public struct _TimePolicy: InputPolicy {
             return .updated(t)
 
         case .next, .prev, .done:
-            return .updated(v) // fokus håndteres af hosten
+            return .updated(v)
+        case .custom(_:):
+            return .rejected
         }
     }
 
@@ -771,6 +777,117 @@ extension _TimePolicy: KeyboardTreeProviding {
     }
 }
 
+public struct RestControlPolicy: InputPolicy {
+    public var addSeconds: Int
+    public var decSeconds: Int
+    public var onAdd: () -> Void
+    public var onDec: () -> Void
+    public var onPause: () -> Void
+    public var onReset: () -> Void
+    public var onSkip: () -> Void
+    
+    public init(
+        addSeconds: Int,
+        decSeconds: Int,
+        onAdd: @escaping () -> Void,
+        onDec: @escaping () -> Void,
+        onPause: @escaping () -> Void,
+        onReset: @escaping () -> Void,
+        onSkip: @escaping () -> Void
+    ) {
+        self.addSeconds = addSeconds
+        self.decSeconds = decSeconds
+        self.onAdd = onAdd
+        self.onDec = onDec
+        self.onPause = onPause
+        self.onReset = onReset
+        self.onSkip = onSkip
+    }
+    
+    public func apply(_ key: NumpadKey, to value: NumericValue) -> EditResult {
+        switch key {
+            case .custom("add"):
+                onAdd()
+            case .custom("dec"):
+                onDec()
+            case .custom("pause"):
+                onPause()
+            case .custom("reset"):
+                onReset()
+            case .custom("skip"):
+                onSkip()
+            default:
+                break
+        }
+        
+        return .updated(value)
+    }
+}
+
+extension RestControlPolicy: KeyboardTreeProviding {
+    public func keyboardTree(hostSupportsNavigation: Bool) -> KeyboardNode {
+
+        // MARK: Styles
+        let circleStyle = KeyboardButtonStyle(
+            fontSize: 24,
+            weight: .bold,
+            cornerRadius: 12,
+            borderWidth: 0,
+            fillColor: .systemGray5,
+            borderColor: .clear,
+            titleColor: .white
+        )
+
+        let sideButton = KeyboardButtonStyle(
+            fontSize: 22,
+            weight: .semibold,
+            cornerRadius: 14,
+            borderWidth: 0,
+            fillColor: .systemGray5,
+            borderColor: .clear,
+            titleColor: .white
+        )
+
+        let primaryButton = KeyboardButtonStyle(
+            fontSize: 22,
+            weight: .semibold,
+            cornerRadius: 14,
+            borderWidth: 0,
+            fillColor: .systemBlue,
+            borderColor: .clear,
+            titleColor: .white
+        )
+
+        // MARK: Tree
+        return .hstack(
+            spacing: 0,
+            children: [
+                .frame(width: nil, height: nil, child:
+                        .vstack(spacing: 0, children: [
+                            .aspectRatio(1.0,
+                                         child: .button(
+                                            title: "Pause",
+                                            sends: .custom("pause"),
+                                            style: circleStyle
+                                         )
+                                        ),
+                        ]),
+                ),
+                
+                .vstack(spacing: 0, children: [
+                    .imageButton(imageName: "keyboard", sends: .done, style: sideButton),
+                    .hstack(spacing: 1, children: [
+                        .button(title: "–", sends: .custom("dec"), style: sideButton),
+                        .button(title: "+", sends: .custom("add"), style: sideButton),
+                    ]),
+                    .button(title: "Reset", sends: .custom("reset"), style: sideButton),
+                    .button(title: "Skip", sends: .custom("skip"), style: primaryButton),
+                ])
+            ]
+        )
+    }
+}
+
 public enum InputPolicies {
     public static func digitsOnly(maxDigits: Int, allowNegative: Bool = false) -> InputPolicy {
         _DigitsOnlyPolicy(maxDigits: maxDigits, allowNegative: allowNegative)
@@ -782,6 +899,29 @@ public enum InputPolicies {
     
     public static func time(limit: _TimePolicy.MaxTimeLimit, allowedNegative: Bool = false) -> InputPolicy {
         _TimePolicy(allowNegative: allowedNegative, maxTimeLimit: limit)
+    }
+    
+    public static func restControl (
+        addSeconds: Int,
+        decSeconds: Int,
+        onAdd: @escaping (Int) -> Void,
+        onDec: @escaping (Int) -> Void,
+        onPause: @escaping () -> Void,
+        onReset: @escaping () -> Void,
+        onSkip: @escaping () -> Void
+        
+    ) -> InputPolicy {
+        RestControlPolicy(addSeconds: addSeconds, decSeconds: decSeconds) {
+            onAdd(addSeconds)
+        } onDec: {
+            onDec(decSeconds)
+        } onPause: {
+            onPause()
+        } onReset: {
+            onReset()
+        } onSkip: {
+            onSkip()
+        }
     }
 }
 

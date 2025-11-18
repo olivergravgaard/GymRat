@@ -49,6 +49,7 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
     
     func restoreRunningRestIfAny() {
         var running: (setId: UUID, duration: Int, startedAt: Date)?
+        
         for ex in exerciseSessions {
             for setStore in ex.setSessions {
                 if let r = setStore.setDTO.restSession,
@@ -62,7 +63,13 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
         }
         
         if let r = running {
-            Task { await restOrchestrator.resume(setId: r.setId, total: r.duration, startedAt: r.startedAt) }
+            Task {
+                await restOrchestrator.restoreIfNeeded(
+                    setId: r.setId,
+                    total: r.duration,
+                    startedAt: r.startedAt
+                )
+            }
         }
     }
 
@@ -107,7 +114,8 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
             exerciseId: exerciseId,
             order: nextOrder,
             settings: ExerciseSettings.defaultSettings,
-            sets: []
+            sets: [],
+            notes: []
         )
         
         let store = ExerciseSessionEditStore(
@@ -129,7 +137,8 @@ final class WorkoutSessionEditStore: WorkoutSessionChildDelegate {
                 exerciseId: exerciseId,
                 order: nextOrder,
                 settings: .defaultSettings,
-                sets: []
+                sets: [],
+                notes: []
             )
             
             exerciseSessions.append(

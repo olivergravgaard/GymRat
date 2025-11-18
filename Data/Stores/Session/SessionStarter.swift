@@ -113,7 +113,8 @@ struct SessionStarter {
                                 performed: false,
                                 restSession: (st.restTemplate == nil ? nil : .init(from: st.restTemplate!))
                             )
-                        }
+                        },
+                    notes: et.notes
                 )
             }
 

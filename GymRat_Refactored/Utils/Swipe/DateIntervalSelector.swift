@@ -1,14 +1,22 @@
 import SwiftUI
 
-struct DateIntervalPickerDesign: View {
+struct DateIntervalSelector: View {
     let calendar: Calendar = .current
     let monthsToShow: Int
     let selectedStart: Date?
     let selectedEnd: Date?
 
-    init(monthsToShow: Int = 3,
-         selectedStart: Date? = Calendar.current.startOfDay(for: .now),
-         selectedEnd: Date? = Calendar.current.date(byAdding: .day, value: 6, to: Calendar.current.startOfDay(for: .now))) {
+    init(
+        monthsToShow: Int = 3,
+        selectedStart: Date? = Calendar.current.startOfDay(for: .now),
+        selectedEnd: Date? = Calendar.current.date(
+            byAdding: .day,
+            value: 6,
+            to: Calendar.current.startOfDay(
+                for: .now
+            )
+        )
+    ) {
         self.monthsToShow = monthsToShow
         self.selectedStart = selectedStart
         self.selectedEnd = selectedEnd
@@ -34,20 +42,21 @@ struct DateIntervalPickerDesign: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
                 }
+                .frame(height: 250)
 
                 VStack(spacing: 6) {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Start")
                                 .font(.caption).foregroundStyle(.secondary)
-                            Text(selectedStart.map { DateIntervalPickerDesign.format($0) } ?? "—")
+                            Text(selectedStart.map { DateIntervalSelector.format($0) } ?? "—")
                                 .fontWeight(.semibold)
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 4) {
                             Text("End")
                                 .font(.caption).foregroundStyle(.secondary)
-                            Text(selectedEnd.map { DateIntervalPickerDesign.format($0) } ?? "—")
+                            Text(selectedEnd.map { DateIntervalSelector.format($0) } ?? "—")
                                 .fontWeight(.semibold)
                         }
                     }
@@ -231,7 +240,7 @@ private struct DayCellDesign: View {
 }
 
 #Preview("DateIntervalPickerDesign") {
-    DateIntervalPickerDesign(
+    DateIntervalSelector(
         monthsToShow: 10,
         selectedStart: Calendar.current.date(byAdding: .day, value: -3, to: Calendar.current.startOfDay(for: .now)),
         selectedEnd: nil

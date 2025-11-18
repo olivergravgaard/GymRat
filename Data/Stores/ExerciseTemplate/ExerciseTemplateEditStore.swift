@@ -29,17 +29,12 @@ final class ExerciseTemplateEditStore: ExerciseChildEditStore {
         delegate?.childDidChange()
     }
     
-    func toggleWarmupRestTimer (_ value: Bool) {
-        exerciseChildDTO.settings.useWarmupRestTimer = value
-        delegate?.childDidChange()
-    }
-    
     func setWarmupRestDuration (_ value: Int) {
         exerciseChildDTO.settings.warmupRestDuration = value
         delegate?.childDidChange()
     }
     
-    func addMissingRestTemplates () {
+    func addMissingRest () {
         let toAdd = setTemplates.filter { $0.hasRest == false}
         
         guard toAdd.count > 0 else { return }
@@ -126,6 +121,18 @@ final class ExerciseTemplateEditStore: ExerciseChildEditStore {
         recomputeSetTypeDisplays()
     }
     
+    func addNote (_ text: String) {
+        let newNote = Note(order: exerciseChildDTO.notes.count + 1, note: "New note")
+        
+        exerciseChildDTO.notes.append(newNote)
+        
+        delegate?.childDidChange()
+    }
+    
+    func updateNote (at index: Int, to newText: String) {
+        exerciseChildDTO.notes[index].note = newText
+    }
+    
     func getDefuaultRestSession (for setType: SetType) -> RestTemplate {
         let isWarmup = setType == .warmup
         return .init(duration: isWarmup ? exerciseChildDTO.settings.warmupRestDuration : exerciseChildDTO.settings.setRestDuration)
@@ -169,6 +176,7 @@ final class ExerciseTemplateEditStore: ExerciseChildEditStore {
     func snapshot () -> ExerciseTemplateDTO {
         var out = exerciseChildDTO
         out.sets = setTemplates.map { $0.snapshot()}.sorted { $0.order < $1.order }
+        
         return out
     }
     

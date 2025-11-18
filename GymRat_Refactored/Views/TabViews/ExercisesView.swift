@@ -49,9 +49,21 @@ struct ExercisesView: View {
                             muscleGroupProvider: appComp.muscleGroupProvider
                         )
                         
+                        let exerciseHistoryStore = ExerciseHistoryStore(
+                            exerciseId: id,
+                            sessionProvider: appComp.sessionProvider
+                        )
+                        
+                        let exerciseRecordStore = ExerciseRecordStore(
+                            exerciseId: id,
+                            sessionProvider: appComp.sessionProvider
+                        )
+                        
                         EditExerciseView(
                             editStore: editStore,
-                            originalDTO: exerciseDTO
+                            originalDTO: exerciseDTO,
+                            exerciseHistoryStore: exerciseHistoryStore,
+                            exerciseRecordStore: exerciseRecordStore
                         )
                         .navigationBarBackButtonHidden()
                     }else {

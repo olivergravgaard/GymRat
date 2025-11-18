@@ -3,6 +3,7 @@ import Foundation
 enum RestState: String, Codable, Equatable {
     case idle
     case running
+    case paused
     case completed
 
 }
@@ -28,12 +29,14 @@ nonisolated public struct RestSession: Codable, Equatable, Sendable {
     var startedAt: Date?
     var endedAt: Date?
     var restState: RestState
+    var pausedRemaining: Int?
         
     init (duration: Int, startedAt: Date?, endedAt: Date?, restState: RestState) {
         self.duration = duration
         self.startedAt = startedAt
         self.endedAt = endedAt
         self.restState = restState
+        self.pausedRemaining = nil
     }
     
     init (from restTemplate: RestTemplate) {
@@ -41,13 +44,14 @@ nonisolated public struct RestSession: Codable, Equatable, Sendable {
         self.startedAt = nil
         self.endedAt = nil
         self.restState = .idle
+        self.pausedRemaining = nil
     }
     
     nonisolated static let defaultSettings = RestSession(
         duration: 0,
         startedAt: nil,
         endedAt: nil,
-        restState: .idle
+        restState: .idle,
     )
     
     nonisolated static func decode (from data: Data) -> RestSession {

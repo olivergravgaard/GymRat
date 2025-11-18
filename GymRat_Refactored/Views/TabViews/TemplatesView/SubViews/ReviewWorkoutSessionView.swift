@@ -1,8 +1,13 @@
-//
-//  ReviewWorkoutSessionView.swift
-//  GymRat_Refactored
-//
-//  Created by Oliver Gravgaard on 15/11/2025.
-//
-
 import Foundation
+import SwiftUI
+
+struct ReviewWorkoutSessionView: View {
+    
+    let workoutSession: WorkoutSessionDTO
+    
+    var body: some View {
+        VStack {
+            
+        }
+    }
+}
