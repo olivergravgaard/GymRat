@@ -4,6 +4,8 @@ struct ProfileView: View {
 
     @EnvironmentObject var appComp: AppComposition
     @EnvironmentObject var tabActions: TabActionCenter
+    @EnvironmentObject var authStore: AuthStore
+    @EnvironmentObject var profileStore: ProfileStore
     
     @State private var path = NavigationPath()
     @StateObject var recentSessionsStore: RecentSessionsStore
@@ -17,29 +19,33 @@ struct ProfileView: View {
     }
     
     var body: some View {
-        NavigationStack (path: $path) {
-            ScrollView(.vertical) {
-                VStack(spacing: 16) {
-                    statisticsCard()
-                    recentWorkoutsCard()
+        if let profile = profileStore.profile {
+            NavigationStack (path: $path) {
+                ScrollView(.vertical) {
+                    VStack(spacing: 16) {
+                        statisticsCard()
+                        recentWorkoutsCard()
+                    }
+                    .padding(.top, 16)
                 }
-                .padding(.top, 16)
+                .scrollIndicators(.hidden)
+                .safeAreaInset(edge: .top) {
+                    TopBar(profile: profile)
+                        .frame(maxWidth: .infinity)
+                }
+                .ignoresSafeArea(edges: [.top])
             }
-            .scrollIndicators(.hidden)
-            .safeAreaInset(edge: .top) {
-                TopBar()
-                    .frame(maxWidth: .infinity)
-            }
-            .ignoresSafeArea(edges: [.top])
+            .onAppear(perform: {
+                tabActions.register(.profile) {
+                    
+                }
+            })
+            .onDisappear(perform: {
+                tabActions.unregister(.profile)
+            })
+        }else {
+            ProgressView()
         }
-        .onAppear(perform: {
-            tabActions.register(.profile) {
-                
-            }
-        })
-        .onDisappear(perform: {
-            tabActions.unregister(.profile)
-        })
     }
     
     @ViewBuilder
@@ -269,6 +275,9 @@ private struct StatCapsule: View {
 }
 
 fileprivate struct TopBar: View {
+    
+    let profile: Profile
+    
     var body: some View {
         HStack (alignment: .center) {
             Image(systemName: "person.crop.circle.fill")
@@ -277,7 +286,7 @@ fileprivate struct TopBar: View {
                 .frame(width: 72)
             
             VStack (alignment: .leading, spacing: 12) {
-                Text("Oliver Gravgaard")
+                Text("@\(profile.username)")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 
@@ -294,7 +303,7 @@ fileprivate struct TopBar: View {
                     Spacer(minLength: 0)
                     
                     VStack (alignment: .leading) {
-                        Text("999")
+                        Text("\(profile.followersCount)")
                             .font(.subheadline)
                             .fontWeight(.semibold)
                         Text("followers")
@@ -305,7 +314,7 @@ fileprivate struct TopBar: View {
                     Spacer(minLength: 0)
                     
                     VStack (alignment: .leading) {
-                        Text("999")
+                        Text("\(profile.followingCount)")
                             .font(.subheadline)
                             .fontWeight(.semibold)
                         Text("following")

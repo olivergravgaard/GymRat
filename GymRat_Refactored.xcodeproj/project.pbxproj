@@ -7,11 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F689343E2ECCA87F004ACCF5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F689343D2ECCA87F004ACCF5 /* GoogleService-Info.plist */; };
+		F68934412ECCAA43004ACCF5 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = F68934402ECCAA43004ACCF5 /* FirebaseAuth */; };
+		F68934432ECCAA43004ACCF5 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = F68934422ECCAA43004ACCF5 /* FirebaseFirestore */; };
+		F6CAFF872ECDD9EC0042C155 /* Screenshot 2025-11-19 at 11.50.27.png in Resources */ = {isa = PBXBuildFile; fileRef = F6CAFF862ECDD9EC0042C155 /* Screenshot 2025-11-19 at 11.50.27.png */; };
 		F6F436762EB4CE5800F5333A /* Demo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6F436752EB4CE5800F5333A /* Demo.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		F60CE8D22E87D0D600FF7C60 /* GymRat_Refactored.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GymRat_Refactored.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F689343D2ECCA87F004ACCF5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		F6CAFF862ECDD9EC0042C155 /* Screenshot 2025-11-19 at 11.50.27.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Screenshot 2025-11-19 at 11.50.27.png"; sourceTree = "<group>"; };
 		F6F436752EB4CE5800F5333A /* Demo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Demo.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -19,6 +25,11 @@
 		F60CE8D42E87D0D600FF7C60 /* GymRat_Refactored */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = GymRat_Refactored;
+			sourceTree = "<group>";
+		};
+		F689343C2ECCA741004ACCF5 /* Auth */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Auth;
 			sourceTree = "<group>";
 		};
 		F6D49F7B2EA0E32100502904 /* Data */ = {
@@ -33,6 +44,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F68934412ECCAA43004ACCF5 /* FirebaseAuth in Frameworks */,
+				F68934432ECCAA43004ACCF5 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -46,6 +59,9 @@
 				F6D49F7B2EA0E32100502904 /* Data */,
 				F60CE8D42E87D0D600FF7C60 /* GymRat_Refactored */,
 				F60CE8D32E87D0D600FF7C60 /* Products */,
+				F689343C2ECCA741004ACCF5 /* Auth */,
+				F689343D2ECCA87F004ACCF5 /* GoogleService-Info.plist */,
+				F6CAFF862ECDD9EC0042C155 /* Screenshot 2025-11-19 at 11.50.27.png */,
 			);
 			sourceTree = "<group>";
 		};
@@ -74,10 +90,13 @@
 			);
 			fileSystemSynchronizedGroups = (
 				F60CE8D42E87D0D600FF7C60 /* GymRat_Refactored */,
+				F689343C2ECCA741004ACCF5 /* Auth */,
 				F6D49F7B2EA0E32100502904 /* Data */,
 			);
 			name = GymRat_Refactored;
 			packageProductDependencies = (
+				F68934402ECCAA43004ACCF5 /* FirebaseAuth */,
+				F68934422ECCAA43004ACCF5 /* FirebaseFirestore */,
 			);
 			productName = GymRat_Refactored;
 			productReference = F60CE8D22E87D0D600FF7C60 /* GymRat_Refactored.app */;
@@ -107,6 +126,9 @@
 			);
 			mainGroup = F60CE8C92E87D0D500FF7C60;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F689343F2ECCAA43004ACCF5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F60CE8D32E87D0D600FF7C60 /* Products */;
 			projectDirPath = "";
@@ -122,6 +144,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F6CAFF872ECDD9EC0042C155 /* Screenshot 2025-11-19 at 11.50.27.png in Resources */,
+				F689343E2ECCA87F004ACCF5 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -348,6 +372,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F689343F2ECCAA43004ACCF5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F68934402ECCAA43004ACCF5 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F689343F2ECCAA43004ACCF5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		F68934422ECCAA43004ACCF5 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F689343F2ECCAA43004ACCF5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F60CE8CA2E87D0D500FF7C60 /* Project object */;
 }
