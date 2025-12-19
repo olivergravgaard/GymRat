@@ -5,14 +5,18 @@ import Foundation
 final class MuscleGroup: Equatable, Identifiable {
     var id: UUID
     @Attribute(.unique) var name: String
-    var isPredefined: Bool
+    var isBuiltin: Bool
     @Relationship(deleteRule: .cascade, inverse: \Exercise.muscleGroup) var exercises: [Exercise] = []
     @Relationship(deleteRule: .nullify, inverse: \WorkoutTemplate.muscleGroups) var workoutTemplates: [WorkoutTemplate] = []
     
-    init (name: String, isPredefined: Bool) {
-        self.id = UUID()
+    init (
+        id: UUID,
+        name: String,
+        isBuiltin: Bool
+    ) {
+        self.id = id
         self.name = name
-        self.isPredefined = isPredefined
+        self.isBuiltin = isBuiltin
     }
 }
 

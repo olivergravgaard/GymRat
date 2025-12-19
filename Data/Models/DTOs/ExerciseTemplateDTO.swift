@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated protocol ExerciseChildDTO: Identifiable, Equatable, Sendable {
+nonisolated protocol ExerciseChildDTO: Identifiable, Equatable, Sendable, Codable {
     associatedtype SetChild: SetChildDTO
     var id: UUID { get set }
     var exerciseId: UUID { get set }

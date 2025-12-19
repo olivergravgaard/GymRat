@@ -1,7 +1,7 @@
 import SwiftUI
+import FirebaseAuth
 
 struct CreateExerciseSheet: View {
-    
     @StateObject private var exerciseFormStore: ExerciseFormStore
     
     @Binding var isPresented: Bool
@@ -9,14 +9,18 @@ struct CreateExerciseSheet: View {
     init (
         isPresented: Binding<Bool>,
         exerciseProvider: ExerciseProvider,
-        muscleGroupProvider: MuscleGroupProvider
+        muscleGroupProvider: MuscleGroupProvider,
+        exerciseSyncService: ExerciseSyncService,
+        userId: String?
     ) {
         self._isPresented = isPresented
         self._exerciseFormStore = StateObject(
             wrappedValue: .init(
                 mode: .create,
                 exerciseProvider: exerciseProvider,
-                muscleGroupProvider: muscleGroupProvider
+                muscleGroupProvider: muscleGroupProvider,
+                exerciseSyncService: exerciseSyncService,
+                userId: userId
             )
         )
     }

@@ -14,11 +14,21 @@ final class WorkoutTemplateEditStore: WorkoutTemplateChildDelegate {
     
     private let repo: TemplateRepository
     private let exerciseProvider: ExerciseProvider
+    private let workoutTemplateSyncService: WorkoutTemplateSyncService
+    private let userId: String?
     
-    init (dto: WorkoutTemplateDTO, repo: TemplateRepository, exerciseProvider: ExerciseProvider) {
+    init (
+        dto: WorkoutTemplateDTO,
+        repo: TemplateRepository,
+        exerciseProvider: ExerciseProvider,
+        workoutTemplateSyncService: WorkoutTemplateSyncService,
+        userId: String?
+    ) {
         self.id = dto.id
         self.repo = repo
         self.exerciseProvider = exerciseProvider
+        self.workoutTemplateSyncService = workoutTemplateSyncService
+        self.userId = userId
         self.exerciseTemplates = dto.exerciseTemplates
             .sorted { $0.order < $1.order}
             .map { .init(dto: $0, delegate: self, parentEditStore: self) }
@@ -107,7 +117,12 @@ final class WorkoutTemplateEditStore: WorkoutTemplateChildDelegate {
             exerciseTemplates: exerciseTemplates.map { $0.snapshot() }.sorted { $0.order < $1.order }
         )
         
-        _ = try await repo.restoreTemplate(from: out)
+        _ = try repo.restoreTemplate(from: out)
+        
+        if let userId = userId {
+            workoutTemplateSyncService.notifyDomainChange(userId: userId)
+        }
+        
         isDirty = false
     }
     

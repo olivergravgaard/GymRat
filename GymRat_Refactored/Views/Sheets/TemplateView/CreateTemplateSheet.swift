@@ -9,14 +9,18 @@ struct CreateTemplateSheet: View {
     init (
         isPresented: Binding<Bool>,
         templateProvider: TemplateProvider,
-        muscleGroupProvider: MuscleGroupProvider
+        muscleGroupProvider: MuscleGroupProvider,
+        workoutTemplateSyncService: WorkoutTemplateSyncService,
+        userId: String?
     ) {
         self._isPresented = isPresented
         self._templateFormStore = StateObject(
             wrappedValue: .init(
                 mode: .create,
                 templateProvider: templateProvider,
-                muscleGroupProvider: muscleGroupProvider
+                muscleGroupProvider: muscleGroupProvider,
+                workoutTemplateSyncService: workoutTemplateSyncService,
+                userId: userId
             )
         )
     }

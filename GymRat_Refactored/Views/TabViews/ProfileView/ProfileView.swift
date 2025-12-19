@@ -4,8 +4,6 @@ struct ProfileView: View {
 
     @EnvironmentObject var appComp: AppComposition
     @EnvironmentObject var tabActions: TabActionCenter
-    @EnvironmentObject var authStore: AuthStore
-    @EnvironmentObject var profileStore: ProfileStore
     
     @State private var path = NavigationPath()
     @StateObject var recentSessionsStore: RecentSessionsStore
@@ -19,7 +17,7 @@ struct ProfileView: View {
     }
     
     var body: some View {
-        if let profile = profileStore.profile {
+        if let profile = appComp.profileStore.profile {
             NavigationStack (path: $path) {
                 ScrollView(.vertical) {
                     VStack(spacing: 16) {
@@ -30,7 +28,9 @@ struct ProfileView: View {
                 }
                 .scrollIndicators(.hidden)
                 .safeAreaInset(edge: .top) {
-                    TopBar(profile: profile)
+                    TopBar(
+                        profile: profile
+                    )
                         .frame(maxWidth: .infinity)
                 }
                 .ignoresSafeArea(edges: [.top])
@@ -276,19 +276,38 @@ private struct StatCapsule: View {
 
 fileprivate struct TopBar: View {
     
+    @EnvironmentObject private var appComp: AppComposition
+    
     let profile: Profile
     
     var body: some View {
         HStack (alignment: .center) {
-            Image(systemName: "person.crop.circle.fill")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 72)
+            Circle()
+                .fill(.black)
+                .frame(width: 70, height: 70)
             
             VStack (alignment: .leading, spacing: 12) {
-                Text("@\(profile.username)")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                HStack {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("@\(profile.username)")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        
+                        Text("\(profile.fullname)")
+                            .font(.footnote)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.gray)
+                    }
+                    
+                    Spacer(minLength: 12)
+                    
+                    Button {
+                        appComp.authStore.logout()
+                    } label: {
+                        Text("SignOut")
+                    }
+
+                }
                 
                 HStack {
                     VStack (alignment: .leading) {

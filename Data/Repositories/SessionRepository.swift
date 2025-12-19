@@ -111,7 +111,7 @@ final class SessionRepository {
             modelById[workoutSession.id] = workoutSession
             let newDTO = toDTO(workoutSession)
             dtoById[workoutSession.id] = newDTO
-            fanout(diff: .init(inserted: [workoutSession.id]))
+            broadcast(diff: .init(inserted: [workoutSession.id]))
         }
     }
     
@@ -179,11 +179,28 @@ final class SessionRepository {
             modelById[id] = nil
             dtoById[id] = nil
             
-            fanout(diff: .init(deleted: [id]))
+            broadcast(diff: .init(deleted: [id]))
         }
     }
     
-    private func fanout (diff: EntityDiff<UUID>) {
+    func reset () {
+        modelById.removeAll()
+        dtoById.removeAll()
+        booted = false
+        
+        
+        let deletedIDs = Array(dtoById.keys)
+        
+        modelById.removeAll()
+        dtoById.removeAll()
+        booted = false
+        
+        if !deletedIDs.isEmpty {
+            broadcast(diff: .init(deleted: deletedIDs))
+        }
+    }
+    
+    private func broadcast (diff: EntityDiff<UUID>) {
         guard booted else { return }
         for cont in diffSubscribers.values {
             cont.yield(diff)

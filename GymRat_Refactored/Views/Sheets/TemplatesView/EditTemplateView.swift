@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import FirebaseAuth
 
 struct ReorderPayload: Identifiable {
     let id = UUID()
@@ -236,7 +237,9 @@ struct EditTemplateView: View {
                     isPresented: $showEditTemplateSheet,
                     template: originalDTO,
                     templateProvider: appComp.templateProvider,
-                    muscleGroupProvider: appComp.muscleGroupProvider
+                    muscleGroupProvider: appComp.muscleGroupProvider,
+                    workoutTemplateSyncService: appComp.workoutTemplateSyncService,
+                    userId: appComp.authStore.user?.uid
                 )
             }
             .sheet(isPresented: $showAddExerciseSheet) {

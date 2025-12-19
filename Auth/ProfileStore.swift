@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseStorage
 
 @MainActor
 final class ProfileStore: ObservableObject {
@@ -10,6 +11,7 @@ final class ProfileStore: ObservableObject {
     @Published private(set) var errorMessage: String?
     
     private let db = Firestore.firestore()
+    private let storage = Storage.storage()
     private var listener: ListenerRegistration?
     
     private let authStore: AuthStore
@@ -71,5 +73,54 @@ final class ProfileStore: ObservableObject {
                     self.profile = profile
                 }
             }
+    }
+    
+    func updateAvatar (with data: Data) async {
+        guard let user = authStore.user else {
+            print("updateAvatar: no authenticated users.")
+            return
+        }
+        
+        let uid = user.uid
+        
+        do {
+            try AvatarCache.saveAvatar(data, for: uid)
+            
+            let filename = "avatar_\(uid).jpg"
+            try await db.collection("users")
+                .document(uid)
+                .updateData([
+                    "avatarFilename": filename
+                ])
+            
+            print("Avatar updated (local only)")
+        }catch {
+            print("Failed to save avatar locally")
+            self.errorMessage = "Failed to save avatar locally"
+        }
+    }
+}
+
+enum AvatarCache {
+    static func avatarURL (for uid: String) -> URL {
+        let filename = "avatar_\(uid).jpg"
+        return FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(filename)
+    }
+    
+    static func saveAvatar (_ data: Data, for uid: String) throws {
+        let url = avatarURL(for: uid)
+        try data.write(to: url, options: [.atomic])
+    }
+    
+    static func loadAvatar (for uid: String) -> UIImage? {
+        let url = avatarURL(for: uid)
+        return UIImage(contentsOfFile: url.path)
+    }
+    
+    static func deleteAvatar (for uid: String) {
+        let url = avatarURL(for: uid)
+        try? FileManager.default.removeItem(at: url)
     }
 }

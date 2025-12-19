@@ -26,6 +26,8 @@ final class ExerciseFormStore: ObservableObject {
     private let exerciseProvider: ExerciseProvider
     private let muscleGroupProvider: MuscleGroupProvider
     private let mode: ExerciseFormMode
+    private let exerciseSyncService: ExerciseSyncService
+    private let userId: String?
 
     // Internals
     private var cancellables = Set<AnyCancellable>()
@@ -39,11 +41,15 @@ final class ExerciseFormStore: ObservableObject {
     init(
         mode: ExerciseFormMode,
         exerciseProvider: ExerciseProvider,
-        muscleGroupProvider: MuscleGroupProvider
+        muscleGroupProvider: MuscleGroupProvider,
+        exerciseSyncService: ExerciseSyncService,
+        userId: String?
     ) {
         self.mode = mode
         self.exerciseProvider = exerciseProvider
         self.muscleGroupProvider = muscleGroupProvider
+        self.exerciseSyncService = exerciseSyncService
+        self.userId = userId
 
         if case .edit(let exercise) = mode {
             self.name = exercise.name
@@ -128,7 +134,8 @@ final class ExerciseFormStore: ObservableObject {
         do {
             switch mode {
             case .create:
-                _ = try await exerciseProvider.create(name: trimmed, muscleGroupID: mg.id)
+                _ = try await exerciseProvider.create(name: trimmed, muscleGroupID: mg.id, ownerId: userId)
+                
                 name = ""
                 selectedMuscleGroup = nil
                 nameStatus = .idle
@@ -143,8 +150,10 @@ final class ExerciseFormStore: ObservableObject {
                 }
                 
                 nameStatus = .idle
-                
-                print("Done editingee")
+            }
+            
+            if let userId = userId {
+                exerciseSyncService.notifyDomainChange(userId: userId)
             }
         } catch {
             nameStatus = .invalid(error.localizedDescription)

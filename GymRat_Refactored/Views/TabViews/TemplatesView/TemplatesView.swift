@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 
 private enum TemplateRoute: Hashable {
     case editTemplate(UUID)
@@ -63,7 +64,9 @@ struct TemplatesView: View {
                             let editStore = WorkoutTemplateEditStore(
                                 dto: templateDTO,
                                 repo: appComp.templateRepository,
-                                exerciseProvider: appComp.exerciseProvider
+                                exerciseProvider: appComp.exerciseProvider,
+                                workoutTemplateSyncService: appComp.workoutTemplateSyncService,
+                                userId: appComp.authStore.user?.uid
                             )
                             
                             EditTemplateView(
@@ -93,7 +96,9 @@ struct TemplatesView: View {
             CreateTemplateSheet(
                 isPresented: $showCreateTemplateSheet,
                 templateProvider: appComp.templateProvider,
-                muscleGroupProvider: appComp.muscleGroupProvider
+                muscleGroupProvider: appComp.muscleGroupProvider,
+                workoutTemplateSyncService: appComp.workoutTemplateSyncService,
+                userId: appComp.authStore.user?.uid
             )
         }
         .sheet(isPresented: $showOverwriteSessionSheet) {

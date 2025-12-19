@@ -10,14 +10,18 @@ struct EditTemplateSheet: View {
         isPresented: Binding<Bool>,
         template: WorkoutTemplateDTO,
         templateProvider: TemplateProvider,
-        muscleGroupProvider: MuscleGroupProvider
+        muscleGroupProvider: MuscleGroupProvider,
+        workoutTemplateSyncService: WorkoutTemplateSyncService,
+        userId: String?
     ) {
         self._isPresented = isPresented
         self._templateFormStore = StateObject(
             wrappedValue: .init(
                 mode: .edit(template: template),
                 templateProvider: templateProvider,
-                muscleGroupProvider: muscleGroupProvider
+                muscleGroupProvider: muscleGroupProvider,
+                workoutTemplateSyncService: workoutTemplateSyncService,
+                userId: userId
             )
         )
     }

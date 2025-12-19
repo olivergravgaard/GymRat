@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 
 enum TestMenuItem: String, CaseIterable, Identifiable {
     var id: String { rawValue }
@@ -13,6 +14,7 @@ struct EditExerciseView: View {
     @EnvironmentObject private var appComp: AppComposition
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tabBarVisibility: TabBarVisibility
+    @EnvironmentObject var authStore: AuthStore
     
     @StateObject var editStore: ExerciseFormStore
     let originalDTO: ExerciseDTO
@@ -223,7 +225,9 @@ struct EditExerciseView: View {
                 isPresented: $showEditExerciseSheet,
                 exercise: originalDTO,
                 exerciseProvider: appComp.exerciseProvider,
-                muscleGroupProvider: appComp.muscleGroupProvider
+                muscleGroupProvider: appComp.muscleGroupProvider,
+                exerciseSyncService: appComp.exerciseSyncService,
+                userId: appComp.authStore.user?.uid
             )
         }
     }

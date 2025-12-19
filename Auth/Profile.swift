@@ -10,6 +10,7 @@ struct Profile: Identifiable, Equatable {
     let createdAt: Date?
     let followersCount: Int
     let followingCount: Int
+    let avatarURL: String?
     
     var fullname: String {
         "\(firstname) \(lastname)"
@@ -23,7 +24,8 @@ struct Profile: Identifiable, Equatable {
         lastname: String,
         createdAt: Date? = nil,
         followersCount: Int,
-        followingCount: Int
+        followingCount: Int,
+        avatarURL: String? = nil
     ) {
         self.id = id
         self.email = email
@@ -33,6 +35,7 @@ struct Profile: Identifiable, Equatable {
         self.createdAt = createdAt
         self.followersCount = 0
         self.followingCount = 0
+        self.avatarURL = nil
     }
     
     init? (doc: DocumentSnapshot) {
@@ -48,6 +51,7 @@ struct Profile: Identifiable, Equatable {
         let timestamp = data["createdAt"] as? Timestamp
         let followersCount = data["followersCount"] as? Int ?? 0
         let followingCount = data["followingCount"] as? Int ?? 0
+        let avatarURL = data["avatarURL"] as? String
         
         self.init(
             id: doc.documentID,
@@ -57,7 +61,8 @@ struct Profile: Identifiable, Equatable {
             lastname: lastname,
             createdAt: timestamp?.dateValue(),
             followersCount: followersCount,
-            followingCount: followingCount
+            followingCount: followingCount,
+            avatarURL: avatarURL
         )
     }
 }

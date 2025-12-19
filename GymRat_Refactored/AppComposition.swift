@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Combine
+import FirebaseAuth
 
 @MainActor
 final class AppComposition: ObservableObject {
@@ -9,8 +10,17 @@ final class AppComposition: ObservableObject {
         case failed(String)
     }
     
+    let schema: Schema
+    
     let modelContainer: ModelContainer
     let modelContext: ModelContext
+    
+    private var cancellables = Set<AnyCancellable>()
+    private var lastUserId: String?
+    
+    // User required stores
+    let authStore: AuthStore
+    let profileStore: ProfileStore
     
     // Repositories
     let muscleGroupRepository: MuscleGroupRepository
@@ -26,6 +36,10 @@ final class AppComposition: ObservableObject {
     let sessionDraftStore: SessionDraftStore
     let sessionStarter: SessionStarter
     
+    // Services
+    let exerciseSyncService: ExerciseSyncService
+    let workoutTemplateSyncService: WorkoutTemplateSyncService
+    
     // Lookup Sources
     let muscleGroupLookupSource: MuscleGroupLookupSource
     let exerciseLookupSource: ExerciseLookupSource
@@ -39,7 +53,7 @@ final class AppComposition: ObservableObject {
         
         isPreview = inMemory
         
-        let schema = Schema([
+        self.schema = Schema([
             MuscleGroup.self,
             Exercise.self,
             WorkoutTemplate.self,
@@ -55,6 +69,10 @@ final class AppComposition: ObservableObject {
         self.modelContainer = try ModelContainer(for: schema, configurations: [config])
         self.modelContext = ModelContext(modelContainer)
         
+        // User required stores
+        self.authStore = AuthStore()
+        self.profileStore = ProfileStore(authStore: authStore)
+        
         // Repositories
         self.muscleGroupRepository = MuscleGroupRepository(context: modelContext)
         self.exerciseRepository = ExerciseRepository(context: modelContext)
@@ -67,10 +85,13 @@ final class AppComposition: ObservableObject {
         self.templateProvider = TemplateProvider(repo: templateRepository)
         self.sessionProvider = SessionProvider(repo: sessionRepository)
         
-        
         let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent("ActiveWorkout.json")
         self.sessionDraftStore = SessionDraftStore(url: url)
         self.sessionStarter = SessionStarter(draftStore: sessionDraftStore)
+        
+        // Services
+        self.exerciseSyncService = ExerciseSyncService(exerciseRepository: exerciseRepository, muscleGroupRepository: muscleGroupRepository)
+        self.workoutTemplateSyncService = WorkoutTemplateSyncService(workoutTemplateRepo: templateRepository)
         
         // LookupSources
         self.muscleGroupLookupSource = MuscleGroupLookupSource(provider: muscleGroupProvider)
@@ -79,26 +100,38 @@ final class AppComposition: ObservableObject {
             exerciseLookup: exerciseLookupSource,
             muscleGroupLookup: muscleGroupLookupSource
         )
+        
+        authStore.$user
+            .map { $0?.uid }
+            .removeDuplicates()
+            .sink { [weak self] newUserId in
+                guard let self else { return }
+                
+                Task { @MainActor in
+                    await self.handleAuthUserChange(newUserId: newUserId)
+                }
+            }
+            .store(in: &cancellables)
     }
     
     func boot () async {
-        guard case .idle = bootState else { return }
+        guard bootState == .idle else { return }
         bootState = .booting
         do {
             // MuscleGroup
             try await muscleGroupRepository.boot()
-            try await seedDefaultMuscleGroupsIfNeeded()
+            try await seedBuiltinMuscleGroupsIfNeeded()
             await muscleGroupProvider.start()
             
             // Exercise
             try await exerciseRepository.boot()
-            try await seedDefaultExercisesIfNeeded()
+            try await seedBuiltinExercisesIfNeeded()
             await exerciseProvider.boot()
             exerciseLookupSource.boot()
             
             // WorkoutTemplate
             try await templateRepository.boot()
-            try await seedDefaultTemplatesIfNeeded()
+            //try await seedDefaultTemplatesIfNeeded()
             await templateProvider.start()
             
             // Session
@@ -106,48 +139,164 @@ final class AppComposition: ObservableObject {
             try await sessionRepository.boot()
             await sessionProvider.boot()
             
+            await authStore.validateSessionIfNeeded()
+            
             bootState = .ready
         }catch {
-            print("\(error.localizedDescription)")
+            print("ERROR APPCOMP BOOT: \(error.localizedDescription)")
             bootState = .failed(error.localizedDescription)
         }
     }
     
-    private func seedDefaultMuscleGroupsIfNeeded () async throws {
+    func clearLocalData () {
+        
+        
+        do {
+            try deleteAll(Exercise.self)
+            try deleteAll(WorkoutTemplate.self)
+            try deleteAll(ExerciseTemplate.self)
+            try deleteAll(SetTemplate.self)
+            try deleteAll(WorkoutSession.self)
+            try deleteAll(ExerciseSession.self)
+            try deleteAll(SetSession.self)
+            try deleteAll(ActiveSessionMarker.self)
+            
+            try modelContext.save()
+            
+            print("APPCOMP CLEARLOCALDATA: Success")
+            
+            bootState = .idle
+        }catch {
+            print("APPCOMP CLEARLOCALDATA: Failed trying to clear all data: \(error.localizedDescription)")
+        }
+    }
+    
+    private func handleAuthUserChange (newUserId: String?) async {
+        let old = lastUserId
+        let new = newUserId
+        lastUserId = new
+        
+        if old != nil, new == nil {
+            cancelSyncTasks()
+            clearLocalData()
+            resetRepositories()
+            return
+        }
+        
+        if old == nil, let uid = new {
+            if bootState != .ready {
+                await boot()
+            }
+            
+            await runInitialSync(userId: uid)
+        }
+        
+        if let old, let new, old != new {
+            cancelSyncTasks()
+            clearLocalData()
+            resetRepositories()
+            
+            if bootState != .ready {
+                await boot()
+            }
+            
+            await runInitialSync(userId: new)
+        }
+    }
+    
+    private func deleteAll<T: PersistentModel>(_ type: T.Type) throws {
+        let descriptor = FetchDescriptor<T>()
+        let all = try modelContext.fetch(descriptor)
+        all.forEach {
+            modelContext.delete($0)
+        }
+    }
+    
+    func resetRepositories () {
+        muscleGroupRepository.reset()
+        exerciseRepository.reset()
+        templateRepository.reset()
+        sessionRepository.reset()
+    }
+    
+    func cancelSyncTasks () {
+        exerciseSyncService.cancelPendingSync()
+        workoutTemplateSyncService.cancelPendingSync()
+    }
+    
+    func runInitialSync(userId: String) async {
+        do {
+            try await exerciseSyncService.pullRemote(userId: userId)
+            try await workoutTemplateSyncService.pullRemote(userId: userId)
+        }catch {
+            print("AppComposition: runInitialSync - failed to sync with database: \(error.localizedDescription)")
+        }
+    }
+    
+    private func seedBuiltinMuscleGroupsIfNeeded () async throws {
         let existing = await muscleGroupRepository.snapshotDTOs()
         guard existing.isEmpty else { return }
         
-        let defs = MuscleGroupCatalog.defaults
+        let builtins = MuscleGroupCatalog.builtins
         
-        for def in defs {
-            _ = try await muscleGroupRepository.create(name: def.name, isPredefined: true)
+        for builtin in builtins {
+            _ = try await muscleGroupRepository.create(
+                id: builtin.id,
+                name: builtin.name,
+                isBuiltin: true
+            )
         }
         
-        print("Seeded \(defs.count) default musclegroups")
+        print("Seeded \(builtins.count) default musclegroups")
     }
     
-    private func seedDefaultExercisesIfNeeded () async throws {
-        let existing = await exerciseRepository.snapshotDTOs()
-        guard existing.isEmpty else { return }
+    private func seedBuiltinExercisesIfNeeded () async throws {
+        let muscleGroups = await muscleGroupRepository.snapshotDTOs()
+        let muscleGroupIDs = muscleGroups.map(\.id)
         
-        let muscleGroups  = await muscleGroupRepository.snapshotDTOs()
-        let mgByName = Dictionary(uniqueKeysWithValues: muscleGroups.map { ($0.name, $0.id) })
+        let builtins = isPreview ? ExerciseCatalog.previews : ExerciseCatalog.builtins
         
-        let defs = isPreview ? ExerciseCatalog.previews : ExerciseCatalog.defaults
+        let existing = await exerciseRepository.getDTOs()
         
-        for def in defs {
-            guard let mgId = mgByName[def.muscleGroup] else {
-                print("Muscle group '\(def.muscleGroup)' not found for exercise '\(def.name)' — skipping.")
+        var createdCount = 0
+        var updatedCount = 0
+        
+        for builtin in builtins {
+            guard let muscleGroupID = muscleGroupIDs.first(where: { $0 == builtin.muscleGroupID}) else {
+                print("Muscle Group '\(builtin.muscleGroupID)' not found for exercise '\(builtin.name)' - skipping")
                 continue
             }
             
-            _ = try await exerciseRepository.create(name: def.name, muscleGroupID: mgId)
+            if let existingDTO = existing.first(where: { $0.id == builtin.id}) {
+                if existingDTO.muscleGroupID != muscleGroupID {
+                    try await exerciseRepository.changeMuscleGroup(id: existingDTO.id, to: muscleGroupID)
+                    updatedCount += 1
+                }
+                
+                if existingDTO.name != builtin.name {
+                    try await exerciseRepository.rename(id: existingDTO.id, to: builtin.name)
+                    updatedCount += 1
+                }
+                
+                continue
+            }else {
+                print("Creating exercise")
+                try await exerciseRepository
+                    .create(
+                        id: builtin.id,
+                        name: builtin.name,
+                        muscleGroupID: builtin.muscleGroupID,
+                        origin: .builtin,
+                        ownerId: nil
+                    )
+                createdCount += 1
+            }
         }
         
-        print("Seeded \(defs.count) default exercises.")
+        print("Exercise seeding: created \(createdCount), updated \(updatedCount)")
     }
     
-    private func seedDefaultTemplatesIfNeeded () async throws {
+    /*private func seedDefaultTemplatesIfNeeded () async throws {
         let existing  = await templateRepository.snapshotDTOs()
         guard existing.isEmpty else {
             return
@@ -209,5 +358,5 @@ final class AppComposition: ObservableObject {
             
             print("Seeded \(defs.count) default templates.")
         }
-    }
+    }*/
 }

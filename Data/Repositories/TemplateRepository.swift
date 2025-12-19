@@ -3,12 +3,10 @@ import Foundation
 
 @MainActor
 final class TemplateRepository {
-    typealias DTO = WorkoutTemplateDTO
-
     private let context: ModelContext
 
     private var modelById: [UUID: WorkoutTemplate] = [:]
-    private var dtoById:   [UUID: DTO]              = [:]
+    private var dtoById: [UUID: WorkoutTemplateDTO] = [:]
     private var booted = false
 
     private var diffContinuations: [UUID: AsyncStream<EntityDiff<UUID>>.Continuation] = [:]
@@ -21,13 +19,14 @@ final class TemplateRepository {
         guard !booted else { return }
         let all = try context.fetch(FetchDescriptor<WorkoutTemplate>())
         modelById = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
-        dtoById   = Dictionary(uniqueKeysWithValues: all.map { ($0.id, toDTO($0)) })
+        dtoById = Dictionary(uniqueKeysWithValues: all.map { ($0.id, toDTO($0)) })
         booted = true
     }
 
-    func snapshotDTOs() async -> [DTO] {
+    func snapshotDTOs() async -> [WorkoutTemplateDTO] {
         Array(dtoById.values)
     }
+    
     func streamDiffs() -> AsyncStream<EntityDiff<UUID>> {
         AsyncStream(bufferingPolicy: .bufferingNewest(1)) { c in
             let id = UUID()
@@ -43,15 +42,10 @@ final class TemplateRepository {
         }
     }
 
-    private func broadcast(diff: EntityDiff<UUID>) {
-        let targets = Array(diffContinuations.values)
-        Task.detached { for cont in targets { cont.yield(diff) } }
-    }
-
-    func fetchDTOs(ids: [UUID]) async throws -> [DTO] {
+    func fetchDTOs(ids: [UUID]) async throws -> [WorkoutTemplateDTO] {
         guard !ids.isEmpty else { return [] }
 
-        var result: [DTO] = []
+        var result: [WorkoutTemplateDTO] = []
         var missing = Set<UUID>()
         for id in ids {
             if let dto = dtoById[id] { result.append(dto) } else { missing.insert(id) }
@@ -71,7 +65,7 @@ final class TemplateRepository {
         return result
     }
 
-    func fetchDTOByName(_ name: String) async throws -> DTO? {
+    func fetchDTOByName(_ name: String) async throws -> WorkoutTemplateDTO? {
         if let hit = dtoById.values.first(where: { $0.name == name }) { return hit }
         let pred = #Predicate<WorkoutTemplate> { $0.name == name }
         if let wt = try context.fetch(FetchDescriptor<WorkoutTemplate>(predicate: pred)).first {
@@ -83,17 +77,17 @@ final class TemplateRepository {
         return nil
     }
     
-    func restoreTemplate(from dto: DTO) async throws {
+    func restoreTemplate(from dto: WorkoutTemplateDTO) throws {
         guard let model = modelById[dto.id] else { return }
 
-        // name
-        if model.name != dto.name { model.name = dto.name }
+        if model.name != dto.name {
+            model.name = dto.name
+        }
 
-        // muscle groups
-        let desiredMGs = Set(dto.muscleGroupsIDs)
-        if desiredMGs != Set(model.muscleGroups.map(\.id)) {
-            let mgById = try resolveMuscleGroups(ids: Array(desiredMGs))
-            model.muscleGroups = dto.muscleGroupsIDs.compactMap { mgById[$0] }
+        let desiredMuscleGroups = Set(dto.muscleGroupsIDs)
+        if desiredMuscleGroups != Set(model.muscleGroups.map(\.id)) {
+            let muscleGroupsById = try resolveMuscleGroups(ids: Array(desiredMuscleGroups))
+            model.muscleGroups = dto.muscleGroupsIDs.compactMap { muscleGroupsById[$0] }
         }
 
         // exercises: delete missing
@@ -149,11 +143,11 @@ final class TemplateRepository {
                     st = SetTemplate(exerciseTemplate: et, order: stDTO.order)
                     context.insert(st)
                 }
-                st.order        = stDTO.order
+                st.order = stDTO.order
                 st.weightTarget = stDTO.weightTarget
-                st.minReps      = stDTO.minReps
-                st.maxReps      = stDTO.maxReps
-                st.setType      = stDTO.setType
+                st.minReps = stDTO.minReps
+                st.maxReps = stDTO.maxReps
+                st.setType = stDTO.setType
                 st.restTemplate = stDTO.restTemplate
 
                 finalSTs.append(st)
@@ -165,8 +159,11 @@ final class TemplateRepository {
         }
 
         finalETs.sort { $0.order < $1.order }
+        
         model.exerciseTemplates = finalETs
-
+        model.needsSync = true
+        model.updatedAt = Date()
+        
         try context.save()
 
         let updatedDTO = toDTO(model)
@@ -174,80 +171,205 @@ final class TemplateRepository {
         broadcast(diff: .init(updated: [model.id]))
     }
 
-    func create(name: String, muscleGroupIDs: [UUID]) async throws -> DTO {
+    func create(
+        name: String,
+        muscleGroupIDs: [UUID],
+        ownerId: String?
+    ) async throws -> WorkoutTemplateDTO {
         if let _ = try await fetchDTOByName(name) {
             throw NSError(domain: "TemplateRepository", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "Name already exists"])
         }
-        let mgs = try muscleGroupIDs.map { try resolveMuscleGroup(id: $0) }
-        let wt = WorkoutTemplate(name: name, muscleGroups: mgs)
-        context.insert(wt)
+        
+        let muscleGroups = try muscleGroupIDs.map { try resolveMuscleGroup(id: $0) }
+        
+        let workoutTemplate = WorkoutTemplate(
+            name: name,
+            muscleGroups: muscleGroups,
+            ownerId: ownerId
+        )
+        
+        context.insert(workoutTemplate)
         try context.save()
 
-        let dto = toDTO(wt)
-        modelById[wt.id] = wt
-        dtoById[wt.id]   = dto
+        modelById[workoutTemplate.id] = workoutTemplate
+        let dto = toDTO(workoutTemplate)
+        dtoById[workoutTemplate.id]   = dto
 
-        broadcast(diff: .init(inserted: [wt.id]))
+        broadcast(diff: .init(inserted: [workoutTemplate.id]))
         return dto
     }
 
-    func create(dto: DTO) async throws {
-        let mgs = try dto.muscleGroupsIDs.map { try resolveMuscleGroup(id: $0) }
-        let wt = WorkoutTemplate(name: dto.name, muscleGroups: mgs)
-        wt.exerciseTemplates = try dto.exerciseTemplates.map { try dtoToExerciseTemplate(dto: $0, workoutTemplate: wt) }
+    func create(dto: WorkoutTemplateDTO, ownerId: String?) async throws {
+        let muscleGroups = try dto.muscleGroupsIDs.map { try resolveMuscleGroup(id: $0) }
+        
+        let workoutTemplate = WorkoutTemplate(
+            name: dto.name,
+            muscleGroups: muscleGroups,
+            ownerId: ownerId
+        )
+        
+        workoutTemplate.exerciseTemplates = try dto.exerciseTemplates.map { try dtoToExerciseTemplate(dto: $0, workoutTemplate: workoutTemplate) }
 
-        context.insert(wt)
+        context.insert(workoutTemplate)
         try context.save()
 
-        let dto = toDTO(wt)
-        dtoById[wt.id]   = dto
-        modelById[wt.id] = wt
+        dtoById[workoutTemplate.id] = dto
+        let dto = toDTO(workoutTemplate)
+        modelById[workoutTemplate.id] = workoutTemplate
 
-        broadcast(diff: .init(inserted: [wt.id]))
+        broadcast(diff: .init(inserted: [workoutTemplate.id]))
     }
 
     func rename(id: UUID, to newName: String) async throws {
-        guard let wt = modelById[id] else { return }
-        guard wt.name != newName else { return }
+        guard let workoutTemplate = modelById[id] else { return }
+        guard workoutTemplate.name != newName else { return }
 
         if let existing = try await fetchDTOByName(newName), existing.id != id {
             throw NSError(domain: "TemplateRepository", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: "Name already exists"])
         }
 
-        wt.name = newName
+        workoutTemplate.name = newName
+        workoutTemplate.updatedAt = Date()
+        workoutTemplate.needsSync = true
+        
         try context.save()
 
-        dtoById[id] = toDTO(wt)
+        dtoById[id] = toDTO(workoutTemplate)
         broadcast(diff: .init(updated: [id]))
     }
 
-    func changeMuscleGroup(id: UUID, to muscleGroupIDs: [UUID]) async throws {
-        guard let wt = modelById[id] else { return }
+    func changeMuscleGroups(id: UUID, to muscleGroupIDs: [UUID]) async throws {
+        guard let workoutTemplate = modelById[id] else { return }
 
-        let newSet = Set(muscleGroupIDs)
-        let currentSet = Set(wt.muscleGroups.map(\.id))
-        guard newSet != currentSet else { return }
+        let newMuscleGroupIDs = Set(muscleGroupIDs)
+        let currentMuscleGroupIDs = Set(workoutTemplate.muscleGroups.map(\.id))
+        
+        guard newMuscleGroupIDs != currentMuscleGroupIDs else { return }
 
-        let mgs = try muscleGroupIDs.map { try resolveMuscleGroup(id: $0) }
-        wt.muscleGroups = mgs
+        let muscleGroups = try muscleGroupIDs.map { try resolveMuscleGroup(id: $0) }
+        
+        workoutTemplate.muscleGroups = muscleGroups
+        workoutTemplate.updatedAt = Date()
+        workoutTemplate.needsSync = true
+        
         try context.save()
 
-        dtoById[id] = toDTO(wt)
+        dtoById[id] = toDTO(workoutTemplate)
         broadcast(diff: .init(updated: [id]))
     }
 
     func delete(id: UUID) async throws {
-        guard let wt = modelById[id] else { return }
-        context.delete(wt)
+        guard let workoutTemplate = modelById[id] else { return }
+        context.delete(workoutTemplate)
         try context.save()
 
         modelById[id] = nil
-        dtoById[id]   = nil
+        dtoById[id] = nil
 
         broadcast(diff: .init(deleted: [id]))
     }
+    
+    func pendingTemplates (for ownerId: String) async -> [WorkoutTemplateDTO] {
+        dtoById.values.compactMap { dto in
+            guard let model = modelById[dto.id] else { return nil }
+            guard model.ownerId == ownerId else { return nil }
+            guard model.needsSync && !model.isDeletedRemotely else { return nil }
+            return dto
+        }
+    }
+    
+    func upsertFromRemote (
+        remote: RemoteWorkoutTemplateDTO,
+        ownerId: String
+    ) throws {
+        let dto = remote.workoutTemplate
+        let templateId = dto.id
+        
+        if remote.isDeleted {
+            if let existing = modelById[templateId] {
+                context.delete(existing)
+                modelById[templateId] = nil
+                dtoById[templateId] = nil
+                try context.save()
+                broadcast(diff: .init(deleted: [templateId]))
+            }
+            
+            return
+        }
+        
+        if let existing = modelById[templateId] {
+            try restoreTemplate(from: dto)
+            existing.ownerId = ownerId
+            existing.needsSync = false
+            existing.isDeletedRemotely = false
+            existing.updatedAt = remote.updatedAt
+        }else {
+            print("Creating from remote")
+            try createFromRemote(dto: dto, ownerId: ownerId, updateAt: remote.updatedAt)
+        }
+    }
+    
+    func markSynced (_ dto: WorkoutTemplateDTO) throws {
+        guard let model = modelById[dto.id] else { return }
+        
+        
+        model.needsSync = false
+        model.updatedAt = Date()
+        
+        try context.save()
+        
+        dtoById[model.id] = toDTO(model)
+        
+        broadcast(diff: .init(updated: [model.id]))
+    }
+    
+    func reset () {
+        modelById.removeAll()
+        dtoById.removeAll()
+        booted = false
+    }
+    
+    private func createFromRemote (dto: WorkoutTemplateDTO, ownerId: String, updateAt: Date) throws {
+        let muscleGroups = try resolveMuscleGroups(ids: dto.muscleGroupsIDs).map { (_, muscleGroup) in
+            muscleGroup
+        }
+        
+        let workoutTemplate = WorkoutTemplate(
+            name: dto.name,
+            muscleGroups: muscleGroups,
+            ownerId: ownerId
+        )
+        
+        workoutTemplate.exerciseTemplates = try dto.exerciseTemplates.map {
+            try dtoToExerciseTemplate(dto: $0, workoutTemplate: workoutTemplate)
+        }
+        
+        workoutTemplate.updatedAt = updateAt
+        workoutTemplate.needsSync = false
+        workoutTemplate.isDeletedRemotely = false
+        
+        context.insert(workoutTemplate)
+        try context.save()
+        
+        modelById[workoutTemplate.id] = workoutTemplate
+        let dto = toDTO(workoutTemplate)
+        dtoById[workoutTemplate.id] = dto
+        
+        broadcast(diff: .init(inserted: [workoutTemplate.id]))
+    }
+    
+    private func broadcast(diff: EntityDiff<UUID>) {
+        guard booted else { return }
+        
+        let targets = Array(diffContinuations.values)
+        
+        for cont in targets {
+            cont.yield(diff)
+        }
+    }
+    
     private func dtoToExerciseTemplate(dto: ExerciseTemplateDTO, workoutTemplate: WorkoutTemplate) throws -> ExerciseTemplate {
         let exercise = try resolveExercise(id: dto.exerciseId)
         let et = ExerciseTemplate(exercise: exercise, workoutTemplate: workoutTemplate, order: dto.order)
@@ -259,24 +381,24 @@ final class TemplateRepository {
     private func dtoToSetTemplate(dto: SetTemplateDTO, exerciseTemplate: ExerciseTemplate) -> SetTemplate {
         let st = SetTemplate(exerciseTemplate: exerciseTemplate, order: dto.order)
         st.weightTarget = dto.weightTarget
-        st.minReps      = dto.minReps
-        st.maxReps      = dto.maxReps
-        st.setType      = dto.setType
+        st.minReps = dto.minReps
+        st.maxReps = dto.maxReps
+        st.setType = dto.setType
         st.restTemplate = dto.restTemplate
         return st
     }
 
-    private func toDTO(_ m: WorkoutTemplate) -> DTO {
-        let dto = DTO(
-            id: m.id,
+    private func toDTO(_ model: WorkoutTemplate) -> WorkoutTemplateDTO {
+        WorkoutTemplateDTO(
+            id: model.id,
             version: dtoFingerprint(
-                name: m.name,
-                mgIDs: m.muscleGroups.map(\.id),
-                ets: m.exerciseTemplates
+                name: model.name,
+                muscleGroupsIDs: model.muscleGroups.map(\.id),
+                exerciseTemplates: model.exerciseTemplates
             ),
-            name: m.name,
-            muscleGroupsIDs: m.muscleGroups.map(\.id),
-            exerciseTemplates: m.exerciseTemplates.map {
+            name: model.name,
+            muscleGroupsIDs: model.muscleGroups.map(\.id),
+            exerciseTemplates: model.exerciseTemplates.map {
                 ExerciseTemplateDTO(
                     id: $0.id,
                     exerciseId: $0.exercise.id,
@@ -297,32 +419,37 @@ final class TemplateRepository {
                 )
             }
         )
-        return dto
     }
 
-    private func dtoFingerprint(name: String, mgIDs: [UUID], ets: [ExerciseTemplate]) -> Int {
+    private func dtoFingerprint(
+        name: String,
+        muscleGroupsIDs: [UUID],
+        exerciseTemplates: [ExerciseTemplate]
+    ) -> Int {
         var hasher = Hasher()
         hasher.combine(name)
-        for id in mgIDs { hasher.combine(id) }
-        for et in ets.sorted(by: { $0.order < $1.order }) {
-            hasher.combine(et.id)
-            hasher.combine(et.exercise.id)
-            hasher.combine(et.order)
-            for st in et.setTemplates.sorted(by: { $0.order < $1.order }) {
-                hasher.combine(st.id)
-                hasher.combine(st.order)
-                hasher.combine(st.weightTarget)
-                hasher.combine(st.minReps)
-                hasher.combine(st.maxReps)
-                hasher.combine(st.setType.rawValue)
-                hasher.combine(st.restTemplate?.encoded()) // Needs to be changed
+        for id in muscleGroupsIDs {
+            hasher.combine(id)
+        }
+        for exerciseTemplate in exerciseTemplates.sorted(by: { $0.order < $1.order }) {
+            hasher.combine(exerciseTemplate.id)
+            hasher.combine(exerciseTemplate.exercise.id)
+            hasher.combine(exerciseTemplate.order)
+            for setTemplate in exerciseTemplate.setTemplates.sorted(by: { $0.order < $1.order }) {
+                hasher.combine(setTemplate.id)
+                hasher.combine(setTemplate.order)
+                hasher.combine(setTemplate.weightTarget)
+                hasher.combine(setTemplate.minReps)
+                hasher.combine(setTemplate.maxReps)
+                hasher.combine(setTemplate.setType.rawValue)
+                hasher.combine(setTemplate.restTemplate?.encoded())
             }
-            // settings påvirker også fingerprint
-            hasher.combine(et.settings.metricType.rawValue)
-            hasher.combine(et.settings.useRestTimer)
-            hasher.combine(et.settings.setRestDuration)
-            hasher.combine(et.settings.useWarmupRestTimer)
-            hasher.combine(et.settings.warmupRestDuration)
+            
+            hasher.combine(exerciseTemplate.settings.metricType.rawValue)
+            hasher.combine(exerciseTemplate.settings.useRestTimer)
+            hasher.combine(exerciseTemplate.settings.setRestDuration)
+            hasher.combine(exerciseTemplate.settings.useWarmupRestTimer)
+            hasher.combine(exerciseTemplate.settings.warmupRestDuration)
         }
         return hasher.finalize()
     }
@@ -336,11 +463,12 @@ final class TemplateRepository {
 
     private func resolveMuscleGroups(ids: [UUID]) throws -> [UUID: MuscleGroup] {
         guard !ids.isEmpty else { return [:] }
+        
         let pred = #Predicate<MuscleGroup> { ids.contains($0.id) }
         let fetched = try context.fetch(FetchDescriptor<MuscleGroup>(predicate: pred))
         return Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0) })
     }
-
+    
     private func resolveExercise(id: UUID) throws -> Exercise {
         let pred = #Predicate<Exercise> { $0.id == id }
         if let ex = try context.fetch(FetchDescriptor<Exercise>(predicate: pred)).first { return ex }

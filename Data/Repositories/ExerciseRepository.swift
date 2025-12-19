@@ -3,12 +3,10 @@ import Foundation
 
 @MainActor
 final class ExerciseRepository {
-    typealias DTO = ExerciseDTO
-
     private let context: ModelContext
 
     private var modelById: [UUID: Exercise] = [:]
-    private var dtoById: [UUID: DTO] = [:]
+    private var dtoById: [UUID: ExerciseDTO] = [:]
     
     private var booted = false
 
@@ -37,10 +35,12 @@ final class ExerciseRepository {
         }
     }
 
-    func snapshotDTOs() async -> [DTO] {
+    func getDTOs () async -> [ExerciseDTO] {
         Array(dtoById.values)
     }
 
+    
+    //
     func streamDiffs() -> AsyncStream<EntityDiff<UUID>> {
         AsyncStream(bufferingPolicy: .bufferingNewest(1)) { c in
             let token = UUID()
@@ -53,6 +53,7 @@ final class ExerciseRepository {
             }
             c.onTermination = { _ in
                 Task { @MainActor in
+                    print("Stream terminated")
                     self.diffSubscribers[token] = nil
                     self.pendingDiffSubscribers[token] = nil
                 }
@@ -60,18 +61,10 @@ final class ExerciseRepository {
         }
     }
 
-    private func fanout (diff: EntityDiff<UUID>) {
-        guard booted else { return }
-        let targets = Array(diffSubscribers.values)
-        for cont in targets {
-            cont.yield(diff)
-        }
-    }
-
-    func fetchDTOs(ids: [UUID]) async throws -> [DTO] {
+    func fetchDTOs(ids: [UUID]) async throws -> [ExerciseDTO] {
         guard !ids.isEmpty else { return [] }
 
-        var result: [DTO] = []
+        var result: [ExerciseDTO] = []
         var missing = Set<UUID>()
 
         for id in ids {
@@ -97,7 +90,7 @@ final class ExerciseRepository {
         return result
     }
 
-    func fetchDTOByName(_ name: String) async throws -> DTO? {
+    func fetchDTOByName(_ name: String) async throws -> ExerciseDTO? {
         if let hit = dtoById.values.first(where: { $0.name == name }) { return hit }
         
         let pred = #Predicate<Exercise> { $0.name == name }
@@ -111,35 +104,61 @@ final class ExerciseRepository {
         return nil
     }
 
-    func create(name: String, muscleGroupID: UUID, isPredefined: Bool = false) async throws {
+    func create(
+        id: UUID,
+        name: String,
+        muscleGroupID: UUID,
+        origin: ExerciseOrigin,
+        ownerId: String?
+    ) async throws {
         if let _ = try await fetchDTOByName(name) {
             throw NSError(domain: "ExerciseRepository", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "Name already exists"])
+                          userInfo: [NSLocalizedDescriptionKey: "ExercieRepository: Name already exists \(name)"])
         }
-        let mg = try resolveMuscleGroup(id: muscleGroupID)
+        
+        let muscleGroup = try resolveMuscleGroup(id: muscleGroupID)
 
-        let ex = Exercise(name: name, muscleGoup: mg, isPredefined: isPredefined)
-        context.insert(ex)
+        let exercise = Exercise(
+            id: id,
+            name: name,
+            muscleGoup: muscleGroup,
+            origin: origin,
+            ownerId: ownerId
+        )
+        
+        context.insert(exercise)
         try context.save()
 
-        modelById[ex.id] = ex
-        let dto = toDTO(ex)
-        dtoById[ex.id] = dto
+        modelById[exercise.id] = exercise
+        let dto = toDTO(exercise)
+        dtoById[exercise.id] = dto
 
-        fanout(diff: .init(inserted: [ex.id]))
+        broadcast(diff: .init(inserted: [exercise.id]))
     }
 
-    func create(dto incoming: ExerciseDTO) async throws {
-        let mg = try resolveMuscleGroup(id: incoming.muscleGroupID)
-        let ex = Exercise(name: incoming.name, muscleGoup: mg, isPredefined: false)
-        context.insert(ex)
+    func create(
+        dto incoming: ExerciseDTO,
+        ownerId: String?
+    ) async throws {
+        print("EXERCISEREPOSITORY: Creating from remote")
+        let muscleGroup = try resolveMuscleGroup(id: incoming.muscleGroupID)
+        
+        let exercise = Exercise(
+            id: incoming.id,
+            name: incoming.name,
+            muscleGoup: muscleGroup,
+            origin: incoming.origin,
+            ownerId: ownerId
+        )
+        
+        context.insert(exercise)
         try context.save()
 
-        let dto = toDTO(ex)
-        modelById[ex.id] = ex
-        dtoById[ex.id]   = dto
+        modelById[exercise.id] = exercise
+        let dto = toDTO(exercise)
+        dtoById[exercise.id] = dto
         
-        fanout(diff: .init(inserted: [ex.id]))
+        broadcast(diff: .init(inserted: [exercise.id]))
     }
 
     func rename(id: UUID, to newName: String) async throws {
@@ -151,47 +170,157 @@ final class ExerciseRepository {
         }
 
         ex.name = newName
+        ex.updatedAt = Date()
+        ex.needsSync = ex.origin.isSyncable
+        
         try context.save()
 
         dtoById[id] = toDTO(ex)
-        fanout(diff: .init(updated: [id]))
+        broadcast(diff: .init(updated: [id]))
     }
 
     func changeMuscleGroup(id: UUID, to muscleGroupID: UUID) async throws {
-        guard let ex = modelById[id], ex.muscleGroup.id != muscleGroupID else { return }
+        guard let exercise = modelById[id], exercise.muscleGroup.id != muscleGroupID else { return }
 
         let mg = try resolveMuscleGroup(id: muscleGroupID)
-        ex.muscleGroup = mg
+        
+        exercise.muscleGroup = mg
+        exercise.updatedAt = Date()
+        exercise.needsSync = exercise.origin.isSyncable
+        
         try context.save()
 
-        dtoById[id] = toDTO(ex)
-        fanout(diff: .init(updated: [id]))
+        dtoById[id] = toDTO(exercise)
+        broadcast(diff: .init(updated: [id]))
     }
 
     func delete(id: UUID) async throws {
-        guard let ex = modelById[id] else { return }
-        context.delete(ex)
+        guard let exercise = modelById[id] else { return }
+        context.delete(exercise)
         try context.save()
 
         modelById[id] = nil
         dtoById[id] = nil
 
-        fanout(diff: .init(deleted: [id]))
+        broadcast(diff: .init(deleted: [id]))
     }
 
-    private func toDTO(_ model: Exercise) -> DTO {
-        DTO(
+    func pendingCustomExercises (for ownerId: String) async -> [Exercise] {
+        modelById.values.filter {
+            $0.origin == .custom &&
+            $0.ownerId == ownerId &&
+            $0.needsSync &&
+            !$0.isDeletedRemotely
+        }
+    }
+    
+    func upsertFromRemote (
+        remote: RemoteExerciseDTO,
+        muscleGroupId: UUID,
+        ownerId: String
+    ) throws {
+        guard let uuid = UUID(uuidString: remote.id) else { return }
+        
+        if let existing = modelById[uuid] {
+            existing.name = remote.name
+            existing.muscleGroup = try resolveMuscleGroup(id: muscleGroupId)
+            existing.origin = .custom
+            existing.ownerId = ownerId
+            existing.updatedAt = remote.updatedAt
+            existing.needsSync = false
+            existing.isDeletedRemotely = remote.isDeleted
+            
+            if remote.isDeleted {
+                context.delete(existing)
+                modelById[uuid] = nil
+                dtoById[uuid] = nil
+                
+                try context.save()
+                
+                return
+            }else {
+                dtoById[uuid] = toDTO(existing)
+            }
+        }else {
+            let muscleGroup = try resolveMuscleGroup(id: muscleGroupId)
+            let ex = Exercise(
+                id: uuid,
+                name: remote.name,
+                muscleGoup: muscleGroup,
+                origin: .custom,
+                ownerId: ownerId
+            )
+            
+            ex.id = uuid
+            ex.updatedAt = remote.updatedAt
+            ex.needsSync = false
+            ex.isDeletedRemotely = remote.isDeleted
+            
+            if remote.isDeleted {
+                return
+            }
+            
+            context.insert(ex)
+            modelById[ex.id] = ex
+            dtoById[ex.id] = toDTO(ex)
+        }
+    }
+    
+    func markSynced (_ exercise: Exercise) throws {
+        exercise.needsSync = false
+        exercise.updatedAt = Date()
+        try context.save()
+        dtoById[exercise.id] = toDTO(exercise)
+        broadcast(diff: .init(updated: [exercise.id]))
+    }
+    
+    func reset () {
+        if booted {
+            let allIDs = Array(modelById.keys)
+            
+            if !allIDs.isEmpty {
+                broadcast(diff: .init(deleted: allIDs))
+            }
+        }
+        
+        modelById.removeAll()
+        dtoById.removeAll()
+        booted = false
+    }
+    
+    private func broadcast (diff: EntityDiff<UUID>) {
+        guard booted else { return }
+        
+        let targets = Array(diffSubscribers.values)
+        
+        for cont in targets {
+            cont.yield(diff)
+        }
+    }
+    
+    private func toDTO(_ model: Exercise) -> ExerciseDTO {
+        ExerciseDTO(
             id: model.id,
-            version: dtoFingerprint(name: model.name, muscleGroupID: model.muscleGroup.id),
+            version: dtoFingerprint(
+                name: model.name,
+                muscleGroupID: model.muscleGroup.id,
+                origin: model.origin
+            ),
             name: model.name,
-            muscleGroupID: model.muscleGroup.id
+            muscleGroupID: model.muscleGroup.id,
+            origin: model.origin
         )
     }
 
-    private func dtoFingerprint(name: String, muscleGroupID: UUID) -> Int {
+    private func dtoFingerprint(
+        name: String,
+        muscleGroupID: UUID,
+        origin: ExerciseOrigin
+    ) -> Int {
         var hasher = Hasher()
         hasher.combine(name)
         hasher.combine(muscleGroupID)
+        hasher.combine(origin)
         return hasher.finalize()
     }
 

@@ -15,7 +15,11 @@ final class AuthStore: ObservableObject {
     init () {
         self.user = Auth.auth().currentUser
         
-        Auth.auth().addStateDidChangeListener { [weak self] _, user in
+        self.setupListenerForUser()
+    }
+    
+    private func setupListenerForUser () {
+        let _ = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             guard let self else { return }
             
             Task { @MainActor in

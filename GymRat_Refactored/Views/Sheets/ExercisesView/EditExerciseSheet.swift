@@ -10,14 +10,18 @@ struct EditExerciseSheet: View {
         isPresented: Binding<Bool>,
         exercise: ExerciseDTO,
         exerciseProvider: ExerciseProvider,
-        muscleGroupProvider: MuscleGroupProvider
+        muscleGroupProvider: MuscleGroupProvider,
+        exerciseSyncService: ExerciseSyncService,
+        userId: String?
     ) {
         self._isPresented = isPresented
         self._exerciseFormStore = StateObject(
             wrappedValue: .init(
                 mode: .edit(exercise: exercise),
                 exerciseProvider: exerciseProvider,
-                muscleGroupProvider: muscleGroupProvider
+                muscleGroupProvider: muscleGroupProvider,
+                exerciseSyncService: exerciseSyncService,
+                userId: userId
             )
         )
     }

@@ -2,9 +2,8 @@ import Foundation
 
 struct MuscleGroupDTO: Identifiable & Hashable & Sendable {
     var id: UUID
-    var version: Int
     var name: String
-    var isPredefined: Bool
+    var isBuiltin: Bool
     
     public func hash(into hasher: inout Hasher) {
         hasher.combine(id)
@@ -18,7 +17,7 @@ struct MuscleGroupDTO: Identifiable & Hashable & Sendable {
         var h = Hasher()
         h.combine(id)
         h.combine(name)
-        h.combine(isPredefined)
+        h.combine(isBuiltin)
         return h.finalize()
     }
 }

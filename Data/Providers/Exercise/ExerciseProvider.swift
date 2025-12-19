@@ -111,8 +111,14 @@ actor ExerciseProvider {
         }
     }
     
-    func create(name: String, muscleGroupID: UUID) async throws {
-        try await repo.create(name: name, muscleGroupID: muscleGroupID)
+    func create(name: String, muscleGroupID: UUID, ownerId: String?) async throws {
+        try await repo.create(
+            id: UUID(),
+            name: name,
+            muscleGroupID: muscleGroupID,
+            origin: .custom,
+            ownerId: ownerId
+        )
     }
 
     func rename(id: UUID, to newName: String) async throws {
@@ -134,14 +140,16 @@ actor ExerciseProvider {
     private func pump() async {
         try? await repo.boot()
         
-        let inital = await repo.snapshotDTOs()
+        let inital = await repo.getDTOs()
         byId = Dictionary(uniqueKeysWithValues: inital.map { ($0.id, $0) })
         rebuildAndFanout()
         booted = true
         signalReadyIfNeeded()
         
         for await d in await repo.streamDiffs() {
-            if Task.isCancelled { break }
+            if Task.isCancelled {
+                break
+            }
             
             for id in d.deleted {
                 byId[id] = nil

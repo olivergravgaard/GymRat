@@ -1,6 +1,7 @@
 import Foundation
+import FirebaseFirestore
 
-struct WorkoutTemplateDTO: Identifiable & Hashable & Sendable {
+struct WorkoutTemplateDTO: Identifiable, Hashable, Sendable, Codable {
     var id: UUID
     var version: Int
     var name: String
@@ -50,4 +51,13 @@ struct WorkoutTemplateDTO: Identifiable & Hashable & Sendable {
         
         return total
     }
+}
+
+struct RemoteWorkoutTemplateDTO: Codable {
+    @DocumentID var docId: String?
+    
+    var id: String
+    var workoutTemplate: WorkoutTemplateDTO
+    var updatedAt: Date
+    var isDeleted: Bool
 }

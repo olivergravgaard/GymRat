@@ -43,7 +43,7 @@ struct AuthView: View {
                     }
 
                     if let error = authFormStore.generalError {
-                        Text("error")
+                        Text("\(error)")
                             .font(.footnote)
                             .foregroundColor(.red)
                             .multilineTextAlignment(.center)

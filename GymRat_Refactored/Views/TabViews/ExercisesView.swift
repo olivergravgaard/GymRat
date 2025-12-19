@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import FirebaseAuth
 
 private enum ExerciseRoute: Hashable {
     case editExercise(UUID)
@@ -46,7 +47,9 @@ struct ExercisesView: View {
                         let editStore = ExerciseFormStore(
                             mode: .edit(exercise: exerciseDTO),
                             exerciseProvider: appComp.exerciseProvider,
-                            muscleGroupProvider: appComp.muscleGroupProvider
+                            muscleGroupProvider: appComp.muscleGroupProvider,
+                            exerciseSyncService: appComp.exerciseSyncService,
+                            userId: appComp.authStore.user?.uid
                         )
                         
                         let exerciseHistoryStore = ExerciseHistoryStore(
@@ -84,7 +87,9 @@ struct ExercisesView: View {
             CreateExerciseSheet(
                 isPresented: $showCreateExerciseSheet,
                 exerciseProvider: appComp.exerciseProvider,
-                muscleGroupProvider: appComp.muscleGroupProvider
+                muscleGroupProvider: appComp.muscleGroupProvider,
+                exerciseSyncService: appComp.exerciseSyncService,
+                userId: appComp.authStore.user?.uid
             )
         }
     }
@@ -92,6 +97,7 @@ struct ExercisesView: View {
 
 fileprivate struct TopBar: View {
     
+    @EnvironmentObject var appComp: AppComposition
     @ObservedObject var filterStore: ExerciseFilterStore
     
     var body: some View {

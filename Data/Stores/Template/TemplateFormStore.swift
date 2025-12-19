@@ -26,6 +26,8 @@ final class TemplateFormStore: ObservableObject {
     private let templateProvider: TemplateProvider
     private let muscleGroupProvider: MuscleGroupProvider
     private let mode: TemplateFormMode
+    private let workoutTemplateSyncService: WorkoutTemplateSyncService
+    private let userId: String?
 
     // Internals
     private var cancellables = Set<AnyCancellable>()
@@ -39,11 +41,15 @@ final class TemplateFormStore: ObservableObject {
     init(
         mode: TemplateFormMode,
         templateProvider: TemplateProvider,
-        muscleGroupProvider: MuscleGroupProvider
+        muscleGroupProvider: MuscleGroupProvider,
+        workoutTemplateSyncService: WorkoutTemplateSyncService,
+        userId: String?
     ) {
         self.mode = mode
         self.templateProvider = templateProvider
         self.muscleGroupProvider = muscleGroupProvider
+        self.workoutTemplateSyncService = workoutTemplateSyncService
+        self.userId = userId
 
         if case .edit(let template) = mode {
             self.name = template.name
@@ -130,7 +136,7 @@ final class TemplateFormStore: ObservableObject {
         do {
             switch mode {
             case .create:
-                _ = try await templateProvider.create(name: trimmed, muscleGroupsIDs: selectedMuscleGroups.map { $0.id })
+                _ = try await templateProvider.create(name: trimmed, muscleGroupsIDs: selectedMuscleGroups.map { $0.id }, ownerId: userId)
                 name = ""
                 selectedMuscleGroups.removeAll()
                 nameStatus = .idle
@@ -148,6 +154,10 @@ final class TemplateFormStore: ObservableObject {
                 }
                 
                 nameStatus = .idle
+            }
+            
+            if let userId = userId {
+                workoutTemplateSyncService.notifyDomainChange(userId: userId)
             }
         } catch {
             nameStatus = .invalid(error.localizedDescription)

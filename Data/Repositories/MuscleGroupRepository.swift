@@ -3,12 +3,10 @@ import Foundation
 
 @MainActor
 final class MuscleGroupRepository {
-    typealias DTO = MuscleGroupDTO
-    
     private let context: ModelContext
     
     private var modelById: [UUID: MuscleGroup] = [:]
-    private var dtoById: [UUID: DTO] = [:]
+    private var dtoById: [UUID: MuscleGroupDTO] = [:]
     private var booted: Bool = false
     
     private var diffContinuations: [UUID: AsyncStream<EntityDiff<UUID>>.Continuation] = [:]
@@ -25,9 +23,10 @@ final class MuscleGroupRepository {
         booted = true
     }
     
-    func snapshotDTOs () async -> [DTO] {
+    func snapshotDTOs () async -> [MuscleGroupDTO] {
         Array(dtoById.values)
     }
+
     
     func streamDiffs () -> AsyncStream<EntityDiff<UUID>> {
         AsyncStream(bufferingPolicy: .bufferingNewest(1)) { c in
@@ -57,10 +56,10 @@ final class MuscleGroupRepository {
         }
     }
     
-    func fetchDTOs(ids: [UUID]) async throws -> [DTO] {
+    func fetchDTOs(ids: [UUID]) async throws -> [MuscleGroupDTO] {
         guard !ids.isEmpty else { return [] }
 
-        var result: [DTO] = []
+        var result: [MuscleGroupDTO] = []
         var missing = Set<UUID>()
 
         for id in ids {
@@ -85,78 +84,71 @@ final class MuscleGroupRepository {
         return result
     }
     
-    func fetchDTOByName(_ name: String) async throws -> DTO? {
-        if let hit = dtoById.values.first(where: { $0.name == name }) { return hit }
-        let pred = #Predicate<MuscleGroup> { $0.name == name }
-        if let mg = try context.fetch(FetchDescriptor<MuscleGroup>(predicate: pred)).first {
-            modelById[mg.id] = mg
-            let dto = toDTO(mg)
-            dtoById[mg.id] = dto
+    func fetchDTOByID(_ id: UUID) async throws -> MuscleGroupDTO? {
+        if let hit = dtoById.values.first(where: { $0.id == id }) { return hit }
+        let pred = #Predicate<MuscleGroup> { $0.id == id }
+        
+        if let muscleGroup = try context.fetch(FetchDescriptor<MuscleGroup>(predicate: pred)).first {
+            modelById[muscleGroup.id] = muscleGroup
+            let dto = toDTO(muscleGroup)
+            dtoById[muscleGroup.id] = dto
             return dto
         }
         return nil
     }
     
-    func create(name: String, isPredefined: Bool) async throws -> DTO {
-        if let _ = try await fetchDTOByName(name) {
+    func fetchDTOByName (_ name: String) async throws -> MuscleGroupDTO? {
+        if let hit = dtoById.values.first(where: { $0.name == name}) { return hit }
+        
+        let pred = #Predicate<MuscleGroup> { $0.name == name }
+        if let muscleGroup = try context.fetch(FetchDescriptor<MuscleGroup>(predicate: pred)).first {
+            modelById[muscleGroup.id] = muscleGroup
+            let dto = toDTO(muscleGroup)
+            dtoById[muscleGroup.id] = dto
+            return dto
+        }
+        
+        return nil
+    }
+    
+    func create(
+        id: UUID,
+        name: String,
+        isBuiltin: Bool
+    ) async throws -> MuscleGroupDTO {
+        if let _ = try await fetchDTOByID(id) {
             throw NSError(domain: "MuscleGroupRepository", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "Name already exists"])
+                          userInfo: [NSLocalizedDescriptionKey: "This MuscleGroup already exists in the MuscleGroupCatalog."])
         }
-        let mg = MuscleGroup(name: name, isPredefined: isPredefined)
-        context.insert(mg)
-        try context.save()
-
-        modelById[mg.id] = mg
-        let dto = toDTO(mg)
-        dtoById[mg.id] = dto
-
-        broadcast(diff: .init(inserted: [mg.id]))
-        return dto
-    }
-
-    func rename(id: UUID, to newName: String) async throws {
-        guard let mg = modelById[id] else { return }
-        guard mg.name != newName else { return }
-
-        // Undgå navnekollision
-        if let existing = try await fetchDTOByName(newName), existing.id != id {
-            throw NSError(domain: "MuscleGroupRepository", code: 2,
-                          userInfo: [NSLocalizedDescriptionKey: "Name already exists"])
-        }
-
-        mg.name = newName
-        try context.save()
-
-        dtoById[id] = toDTO(mg)
-        broadcast(diff: .init(updated: [id]))
-    }
-
-    func delete(id: UUID) async throws {
-        guard let mg = modelById[id] else { return }
-        context.delete(mg)
-        try context.save()
-
-        modelById[id] = nil
-        dtoById[id] = nil
-
-        broadcast(diff: .init(deleted: [id]))
-    }
-
-    private func toDTO(_ model: MuscleGroup) -> DTO {
-        let dto = DTO(
-            id: model.id,
-            version: dtoFingerprint(name: model.name, isPredefined: model.isPredefined),
-            name: model.name,
-            isPredefined: model.isPredefined
+        
+        let muscleGroup = MuscleGroup(
+            id: id,
+            name: name,
+            isBuiltin: isBuiltin
         )
+        
+        context.insert(muscleGroup)
+        try context.save()
+        
+        modelById[muscleGroup.id] = muscleGroup
+        let dto = toDTO(muscleGroup)
+        dtoById[muscleGroup.id] = dto
+        
+        broadcast(diff: .init(inserted: [muscleGroup.id]))
         return dto
     }
-
-    private func dtoFingerprint(name: String, isPredefined: Bool) -> Int {
-        var hasher = Hasher()
-        hasher.combine(name)
-        hasher.combine(isPredefined)
-        return hasher.finalize()
+    
+    func reset () {
+        modelById.removeAll()
+        dtoById.removeAll()
+        booted = false
     }
 
+    private func toDTO(_ model: MuscleGroup) -> MuscleGroupDTO {
+        MuscleGroupDTO(
+            id: model.id,
+            name: model.name,
+            isBuiltin: model.isBuiltin
+        )
+    }
 }

@@ -64,8 +64,8 @@ actor TemplateProvider {
         }
     }
     
-    func create (name: String, muscleGroupsIDs: [UUID]) async throws -> WorkoutTemplateDTO {
-        try await repo.create(name: name, muscleGroupIDs: muscleGroupsIDs)
+    func create (name: String, muscleGroupsIDs: [UUID], ownerId: String?) async throws -> WorkoutTemplateDTO {
+        try await repo.create(name: name, muscleGroupIDs: muscleGroupsIDs, ownerId: ownerId)
     }
     
     func rename (id: UUID, to newName: String) async throws {
@@ -73,7 +73,7 @@ actor TemplateProvider {
     }
     
     func changeMuscleGroups (id: UUID, to muscleGroupsIDs: [UUID]) async throws {
-        try await repo.changeMuscleGroup(id: id, to: muscleGroupsIDs)
+        try await repo.changeMuscleGroups(id: id, to: muscleGroupsIDs)
     }
     
     func delete (id: UUID) async throws {

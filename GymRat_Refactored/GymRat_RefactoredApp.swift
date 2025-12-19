@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Firebase
+import FirebaseAuth
 
 @main
 struct GymRat_RefactoredApp: App {
@@ -11,53 +12,35 @@ struct GymRat_RefactoredApp: App {
         AppTheme(rawValue: storedTheme) ?? .system
     }
     
-    @StateObject private var comp: AppComposition = {
-        try! AppComposition(inMemory: false)
-    }()
-    
-    @StateObject private var authStore: AuthStore
-    @StateObject private var profileStore: ProfileStore
+    @StateObject private var appComp: AppComposition
     @StateObject private var connectivity = ConnectivtyMonitor()
     
     init () {
         FirebaseApp.configure()
         
-        let authStore = AuthStore()
-        _authStore = StateObject(wrappedValue: authStore)
-        _profileStore = StateObject(wrappedValue: ProfileStore(authStore: authStore))
+        _appComp = StateObject(wrappedValue: try! AppComposition(inMemory: false))
     }
     
     var body: some Scene {
         WindowGroup {
             Group {
-                if authStore.user != nil {
-                    if comp.bootState == .ready {
-                        RootView(comp: comp)
-                            .environmentObject(authStore)
-                            .environmentObject(profileStore)
+                if let user = appComp.authStore.user {
+                    if appComp.bootState == .ready {
+                        RootView(comp: appComp)
+                            .id(user.uid)
+                            .environmentObject(appComp)
                             .preferredColorScheme(theme.colorScheme)
                     }else {
                         ProgressView()
                             .task {
-                                await comp.boot()
+                                await appComp.boot()
                             }
                     }
                 }else {
-                    AuthView(authFormStore: AuthFormStore(authStore: authStore))
+                    AuthView(authFormStore: AuthFormStore(authStore: appComp.authStore))
                 }
             }
-            .task {
-                if connectivity.isOnline {
-                    await authStore.validateSessionIfNeeded()
-                }
-            }
-            .onChange(of: connectivity.isOnline) { _, isOnline in
-                guard isOnline else { return }
-                
-                Task {
-                    await authStore.validateSessionIfNeeded()
-                }
-            }
+            .environmentObject(appComp)
         }
     }
 }
